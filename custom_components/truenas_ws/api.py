@@ -500,36 +500,22 @@ class TrueNASWebSocketClient:
         # Fallback: get memory from reporting.get_data
         if mem_used == 0:
             now = int(time_mod.time())
-            # Try multiple graph name formats
-            for graph_name in ("memory", "system.ram"):
-                if mem_used > 0:
-                    break
-                try:
-                    mem_report = await self._send_request(
-                        "reporting.get_data",
-                        [[{"name": graph_name}], {"start": now - 120, "end": now}],
-                    )
-                    if not hasattr(self, "_report_mem_logged"):
-                        self._report_mem_logged = True
-                        _LOGGER.warning(
-                            "TrueNAS reporting.get_data(%s): type=%s, value=%s",
-                            graph_name,
-                            type(mem_report).__name__,
-                            str(mem_report)[:500],
-                        )
-                    if isinstance(mem_report, list) and mem_report:
-                        report = mem_report[0]
-                        if isinstance(report, dict):
-                            data_points = report.get("data", [])
-                            legend = report.get("legend", [])
-                            if data_points and legend:
-                                # Find the last data point with valid values
+            try:
+                mem_report = await self._send_request(
+                    "reporting.get_data",
+                    [[{"name": "memory"}], {"start": now - 120, "end": now}],
+                )
+                if isinstance(mem_report, list) and mem_report:
+                    report = mem_report[0]
+                    if isinstance(report, dict):
+                        data_points = report.get("data", [])
+                        legend = report.get("legend", [])
+                        if data_points:
+                            if legend:
+                                # Multi-column format with legend
                                 for row in reversed(data_points):
                                     if isinstance(row, list) and len(row) > 1:
-                                        has_values = any(
-                                            v is not None for v in row[1:]
-                                        )
-                                        if has_values:
+                                        if any(v is not None for v in row[1:]):
                                             for i, col in enumerate(legend):
                                                 if i >= len(row) or row[i] is None:
                                                     continue
@@ -540,54 +526,19 @@ class TrueNASWebSocketClient:
                                                     mem_free = int(val)
                                                 elif col == "arc_size":
                                                     arc_size = int(val)
-                                                elif col == "arc_hit_ratio":
-                                                    arc_hit = val
                                             break
-                except (TrueNASAPIError, TrueNASTimeoutError):
-                    _LOGGER.debug(
-                        "reporting.get_data(%s) not available", graph_name
-                    )
-
-        # Fallback: try reporting.netdata_get_data for newer TrueNAS
-        if mem_used == 0:
-            try:
-                now = int(time_mod.time())
-                netdata = await self._send_request(
-                    "reporting.netdata_get_data",
-                    [
-                        [{"name": "system.ram"}],
-                        {"start": now - 120, "end": now},
-                    ],
-                )
-                _LOGGER.debug("netdata_get_data response: %s", type(netdata).__name__)
-                if isinstance(netdata, list) and netdata:
-                    report = netdata[0]
-                    if isinstance(report, dict):
-                        data_points = report.get("data", [])
-                        legend = report.get("legend", [])
-                        if data_points and legend:
-                            for row in reversed(data_points):
-                                if isinstance(row, list) and len(row) > 1:
-                                    has_values = any(
-                                        v is not None for v in row[1:]
-                                    )
-                                    if has_values:
-                                        for i, col in enumerate(legend):
-                                            if i >= len(row) or row[i] is None:
-                                                continue
-                                            val = float(row[i])
-                                            # netdata reports in MiB
-                                            if col == "used":
-                                                mem_used = int(val * 1024 * 1024)
-                                            elif col == "free":
-                                                mem_free = int(val * 1024 * 1024)
-                                            elif col == "cached":
-                                                pass  # ignore cached
-                                            elif col == "buffers":
-                                                pass
-                                        break
+                            else:
+                                # Simple format: [[timestamp, value], ...]
+                                # Value is used memory in bytes
+                                for row in reversed(data_points):
+                                    if isinstance(row, list) and len(row) >= 2:
+                                        if row[1] is not None:
+                                            mem_used = int(row[1])
+                                            if mem_total > 0:
+                                                mem_free = mem_total - mem_used
+                                            break
             except (TrueNASAPIError, TrueNASTimeoutError):
-                _LOGGER.debug("reporting.netdata_get_data not available")
+                _LOGGER.debug("reporting.get_data(memory) not available")
 
         # Calculate memory percentage
         if mem_total > 0 and mem_used > 0:
@@ -598,31 +549,60 @@ class TrueNASWebSocketClient:
 
         # ARC stats from separate query if not yet populated
         if arc_size == 0:
-            try:
-                now = int(time_mod.time())
-                for graph_name in ("arcsize", "zfs_arc_size"):
-                    if arc_size > 0:
-                        break
-                    try:
-                        arc_report = await self._send_request(
-                            "reporting.get_data",
-                            [[{"name": graph_name}], {"start": now - 120, "end": now}],
-                        )
-                        if isinstance(arc_report, list) and arc_report:
-                            report = arc_report[0]
-                            if isinstance(report, dict):
-                                data_points = report.get("data", [])
-                                if data_points:
-                                    for row in reversed(data_points):
-                                        if isinstance(row, list) and len(row) > 1:
-                                            vals = [v for v in row[1:] if v is not None]
-                                            if vals:
-                                                arc_size = int(vals[0])
+            now = int(time_mod.time())
+            for graph_name in ("arcsize", "zfs_arc_size"):
+                if arc_size > 0:
+                    break
+                try:
+                    arc_report = await self._send_request(
+                        "reporting.get_data",
+                        [[{"name": graph_name}], {"start": now - 120, "end": now}],
+                    )
+                    if isinstance(arc_report, list) and arc_report:
+                        report = arc_report[0]
+                        if isinstance(report, dict):
+                            data_points = report.get("data", [])
+                            if data_points:
+                                for row in reversed(data_points):
+                                    if isinstance(row, list) and len(row) >= 2:
+                                        if row[1] is not None:
+                                            arc_size = int(row[1])
+                                            break
+                except (TrueNASAPIError, TrueNASTimeoutError):
+                    pass
+
+        # ARC hit ratio
+        if arc_hit == 0.0:
+            now = int(time_mod.time())
+            for graph_name in ("arcrate", "zfs_arc_rate", "architratio"):
+                if arc_hit > 0:
+                    break
+                try:
+                    hit_report = await self._send_request(
+                        "reporting.get_data",
+                        [[{"name": graph_name}], {"start": now - 120, "end": now}],
+                    )
+                    if isinstance(hit_report, list) and hit_report:
+                        report = hit_report[0]
+                        if isinstance(report, dict):
+                            data_points = report.get("data", [])
+                            legend = report.get("legend", [])
+                            if data_points:
+                                for row in reversed(data_points):
+                                    if isinstance(row, list) and len(row) >= 2:
+                                        if row[1] is not None:
+                                            if legend:
+                                                # Find hit column
+                                                for i, col in enumerate(legend):
+                                                    if "hit" in col.lower() and i < len(row) and row[i] is not None:
+                                                        arc_hit = float(row[i])
+                                                        break
+                                            else:
+                                                arc_hit = float(row[1])
+                                            if arc_hit > 0:
                                                 break
-                    except (TrueNASAPIError, TrueNASTimeoutError):
-                        pass
-            except Exception:  # noqa: BLE001
-                _LOGGER.debug("ARC stats not available")
+                except (TrueNASAPIError, TrueNASTimeoutError):
+                    pass
 
         # Try to get CPU temperature
         if cpu_temp is None:
@@ -722,6 +702,16 @@ class TrueNASWebSocketClient:
         except TrueNASAPIError:
             result = await self._send_request("network.interface.query")
 
+        if not hasattr(self, "_iface_logged") and result:
+            self._iface_logged = True
+            # Log first interface state for debugging
+            first = result[0] if result else {}
+            state = first.get("state", {})
+            _LOGGER.warning(
+                "TrueNAS interface.query first result state keys: %s",
+                list(state.keys()) if isinstance(state, dict) else state,
+            )
+
         interfaces = [NetworkInterface.from_api(n) for n in result]
 
         # If byte counters are 0, try to get them from reporting
@@ -732,6 +722,7 @@ class TrueNASWebSocketClient:
             import time as time_mod
 
             now = int(time_mod.time())
+            first_logged = False
             for iface in interfaces:
                 try:
                     report = await self._send_request(
@@ -741,45 +732,58 @@ class TrueNASWebSocketClient:
                             {"start": now - 120, "end": now},
                         ],
                     )
+                    if not first_logged:
+                        first_logged = True
+                        _LOGGER.warning(
+                            "TrueNAS network reporting(%s): %s",
+                            iface.name,
+                            str(report)[:500],
+                        )
                     if isinstance(report, list) and report:
                         rep = report[0]
                         if isinstance(rep, dict):
                             data_points = rep.get("data", [])
                             legend = rep.get("legend", [])
-                            _LOGGER.debug(
-                                "Network %s legend: %s, points: %d",
-                                iface.name,
-                                legend,
-                                len(data_points),
-                            )
-                            if data_points and legend:
-                                # Get cumulative totals from last data point
-                                for row in reversed(data_points):
-                                    if isinstance(row, list) and len(row) > 1:
-                                        has_values = any(
-                                            v is not None for v in row[1:]
-                                        )
-                                        if has_values:
-                                            rx = 0
-                                            tx = 0
-                                            for i, col in enumerate(legend):
-                                                if i >= len(row) or row[i] is None:
-                                                    continue
-                                                val = abs(float(row[i]))
-                                                if "received" in col or "in" == col or col == "received_bytes":
-                                                    rx = int(val)
-                                                elif "sent" in col or "out" == col or col == "sent_bytes":
-                                                    tx = int(val)
-                                            if rx > 0 or tx > 0:
+                            if data_points:
+                                if legend:
+                                    # Multi-column with legend
+                                    for row in reversed(data_points):
+                                        if isinstance(row, list) and len(row) > 1:
+                                            if any(v is not None for v in row[1:]):
+                                                rx = 0
+                                                tx = 0
+                                                for i, col in enumerate(legend):
+                                                    if i >= len(row) or row[i] is None:
+                                                        continue
+                                                    val = abs(float(row[i]))
+                                                    if "received" in col or col == "in":
+                                                        rx = int(val)
+                                                    elif "sent" in col or col == "out":
+                                                        tx = int(val)
+                                                if rx > 0 or tx > 0:
+                                                    from dataclasses import replace
+
+                                                    idx = interfaces.index(iface)
+                                                    interfaces[idx] = replace(
+                                                        iface,
+                                                        received_bytes=rx,
+                                                        sent_bytes=tx,
+                                                    )
+                                                break
+                                else:
+                                    # Simple format: [[timestamp, value], ...]
+                                    # Sum up rate values for total bytes
+                                    for row in reversed(data_points):
+                                        if isinstance(row, list) and len(row) >= 2:
+                                            if row[1] is not None:
                                                 from dataclasses import replace
 
                                                 idx = interfaces.index(iface)
                                                 interfaces[idx] = replace(
                                                     iface,
-                                                    received_bytes=rx,
-                                                    sent_bytes=tx,
+                                                    received_bytes=int(abs(row[1])),
                                                 )
-                                            break
+                                                break
                 except (TrueNASAPIError, TrueNASTimeoutError):
                     _LOGGER.debug(
                         "Network reporting for %s not available", iface.name

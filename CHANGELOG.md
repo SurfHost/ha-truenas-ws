@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.8] - 2026-04-11
+
+### Fixed
+
+- Memory stats: handle simple `[[timestamp, value]]` format from `reporting.get_data` (no legend/multi-column)
+- ARC hit ratio: added separate query for ARC hit rate data
+- Network interfaces: added diagnostic logging to identify data format, handle simple data format
+- Memory usage, memory free, memory used should now show actual values
+
 ## [0.1.7] - 2026-04-11
 
 ### Changed
