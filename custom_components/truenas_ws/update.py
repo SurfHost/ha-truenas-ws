@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
+from homeassistant.components.update import (
+    UpdateEntity,
+    UpdateEntityDescription,
+    UpdateEntityFeature,
+)
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
@@ -28,16 +31,11 @@ class TrueNASUpdateEntity(TrueNASEntity, UpdateEntity):
 
     def __init__(self, coordinator: TrueNASDataUpdateCoordinator) -> None:
         """Initialize the update entity."""
-        description = EntityDescription(
+        description = UpdateEntityDescription(
             key="system_update",
-            translation_key="system_update",
+            name="System update",
         )
         super().__init__(coordinator, description, DEVICE_KEY_SYSTEM)
-
-    @property
-    def name(self) -> str:
-        """Return the name."""
-        return "System update"
 
     @property
     def installed_version(self) -> str | None:

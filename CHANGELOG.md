@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.6] - 2026-04-11
+
+### Fixed
+
+- Update entity crash: use `UpdateEntityDescription` instead of `EntityDescription` (fixes `display_precision` AttributeError spamming every 30s)
+
 ## [0.1.5] - 2026-04-11
 
 ### Fixed
