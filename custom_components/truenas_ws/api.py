@@ -402,6 +402,8 @@ class TrueNASWebSocketClient:
 
     async def get_system_stats(self) -> SystemStats:
         """Get real-time system statistics using multiple API methods."""
+        import time as time_mod
+
         cpu_usage = 0.0
         mem_total = 0
         mem_used = 0
@@ -418,6 +420,7 @@ class TrueNASWebSocketClient:
             result = await self._send_request("reporting.realtime")
             if isinstance(result, dict):
                 realtime_worked = True
+                _LOGGER.debug("reporting.realtime keys: %s", list(result.keys()))
                 # CPU usage
                 cpu_raw = result.get("cpu", {})
                 if isinstance(cpu_raw, dict):
@@ -437,11 +440,23 @@ class TrueNASWebSocketClient:
                 # Memory
                 mem_raw = result.get("memory", {})
                 if isinstance(mem_raw, dict):
+                    _LOGGER.debug("realtime memory keys: %s", list(mem_raw.keys()))
                     mem_total = int(mem_raw.get("physmem", mem_raw.get("total", 0)))
                     mem_used = int(mem_raw.get("used", 0))
                     mem_free = int(mem_raw.get("free", 0))
                     arc_size = int(mem_raw.get("arc_size", 0))
                     arc_max = int(mem_raw.get("arc_max", 0))
+
+                    # Some TrueNAS versions put memory under 'classes'
+                    if mem_used == 0 and "classes" in mem_raw:
+                        classes = mem_raw["classes"]
+                        if isinstance(classes, dict):
+                            # Sum up wired + active as used, inactive + free as free
+                            mem_used = int(classes.get("page_tables", 0)) + \
+                                       int(classes.get("arc", 0)) + \
+                                       int(classes.get("apps", 0))
+                            mem_free = int(classes.get("free", 0))
+                            arc_size = int(classes.get("arc", 0))
 
                 # CPU temp from realtime
                 cpu_temp_raw = result.get("cpu_temp")
@@ -451,7 +466,7 @@ class TrueNASWebSocketClient:
         except (TrueNASAPIError, TrueNASTimeoutError):
             _LOGGER.debug("reporting.realtime not available")
 
-        # Fallback: get system info for memory if realtime didn't work
+        # Fallback: get system info for total memory and CPU
         if not realtime_worked or mem_total == 0:
             try:
                 sysinfo = await self._send_request("system.info")
@@ -469,32 +484,98 @@ class TrueNASWebSocketClient:
                 pass
 
         # Fallback: get memory from reporting.get_data
-        if mem_used == 0 and mem_total > 0:
+        if mem_used == 0:
+            now = int(time_mod.time())
+            # Try multiple graph name formats
+            for graph_name in ("memory", "system.ram"):
+                if mem_used > 0:
+                    break
+                try:
+                    mem_report = await self._send_request(
+                        "reporting.get_data",
+                        [[{"name": graph_name}], {"start": now - 120, "end": now}],
+                    )
+                    _LOGGER.debug(
+                        "reporting.get_data(%s) response type: %s",
+                        graph_name,
+                        type(mem_report).__name__,
+                    )
+                    if isinstance(mem_report, list) and mem_report:
+                        report = mem_report[0]
+                        if isinstance(report, dict):
+                            data_points = report.get("data", [])
+                            legend = report.get("legend", [])
+                            _LOGGER.debug(
+                                "Memory report legend: %s, data points: %d",
+                                legend,
+                                len(data_points),
+                            )
+                            if data_points and legend:
+                                # Find the last data point with valid values
+                                for row in reversed(data_points):
+                                    if isinstance(row, list) and len(row) > 1:
+                                        has_values = any(
+                                            v is not None for v in row[1:]
+                                        )
+                                        if has_values:
+                                            for i, col in enumerate(legend):
+                                                if i >= len(row) or row[i] is None:
+                                                    continue
+                                                val = float(row[i])
+                                                if col == "used":
+                                                    mem_used = int(val)
+                                                elif col == "free":
+                                                    mem_free = int(val)
+                                                elif col == "arc_size":
+                                                    arc_size = int(val)
+                                                elif col == "arc_hit_ratio":
+                                                    arc_hit = val
+                                            break
+                except (TrueNASAPIError, TrueNASTimeoutError):
+                    _LOGGER.debug(
+                        "reporting.get_data(%s) not available", graph_name
+                    )
+
+        # Fallback: try reporting.netdata_get_data for newer TrueNAS
+        if mem_used == 0:
             try:
-                import time
-                now = int(time.time())
-                mem_report = await self._send_request(
-                    "reporting.get_data",
-                    [[{"name": "memory"}], {"start": now - 60, "end": now}],
+                now = int(time_mod.time())
+                netdata = await self._send_request(
+                    "reporting.netdata_get_data",
+                    [
+                        [{"name": "system.ram"}],
+                        {"start": now - 120, "end": now},
+                    ],
                 )
-                if isinstance(mem_report, list) and mem_report:
-                    report = mem_report[0]
+                _LOGGER.debug("netdata_get_data response: %s", type(netdata).__name__)
+                if isinstance(netdata, list) and netdata:
+                    report = netdata[0]
                     if isinstance(report, dict):
                         data_points = report.get("data", [])
                         legend = report.get("legend", [])
                         if data_points and legend:
-                            last = data_points[-1]
-                            if isinstance(last, list) and len(last) > 1:
-                                # Find used memory column
-                                for i, col in enumerate(legend):
-                                    if col == "used" and i < len(last) and last[i]:
-                                        mem_used = int(float(last[i]))
-                                    elif col == "free" and i < len(last) and last[i]:
-                                        mem_free = int(float(last[i]))
-                                    elif col == "arc_size" and i < len(last) and last[i]:
-                                        arc_size = int(float(last[i]))
+                            for row in reversed(data_points):
+                                if isinstance(row, list) and len(row) > 1:
+                                    has_values = any(
+                                        v is not None for v in row[1:]
+                                    )
+                                    if has_values:
+                                        for i, col in enumerate(legend):
+                                            if i >= len(row) or row[i] is None:
+                                                continue
+                                            val = float(row[i])
+                                            # netdata reports in MiB
+                                            if col == "used":
+                                                mem_used = int(val * 1024 * 1024)
+                                            elif col == "free":
+                                                mem_free = int(val * 1024 * 1024)
+                                            elif col == "cached":
+                                                pass  # ignore cached
+                                            elif col == "buffers":
+                                                pass
+                                        break
             except (TrueNASAPIError, TrueNASTimeoutError):
-                _LOGGER.debug("reporting.get_data not available for memory")
+                _LOGGER.debug("reporting.netdata_get_data not available")
 
         # Calculate memory percentage
         if mem_total > 0 and mem_used > 0:
@@ -503,26 +584,60 @@ class TrueNASWebSocketClient:
             mem_used = mem_total - mem_free
             mem_pct = round(mem_used / mem_total * 100, 1)
 
+        # ARC stats from separate query if not yet populated
+        if arc_size == 0:
+            try:
+                now = int(time_mod.time())
+                for graph_name in ("arcsize", "zfs_arc_size"):
+                    if arc_size > 0:
+                        break
+                    try:
+                        arc_report = await self._send_request(
+                            "reporting.get_data",
+                            [[{"name": graph_name}], {"start": now - 120, "end": now}],
+                        )
+                        if isinstance(arc_report, list) and arc_report:
+                            report = arc_report[0]
+                            if isinstance(report, dict):
+                                data_points = report.get("data", [])
+                                if data_points:
+                                    for row in reversed(data_points):
+                                        if isinstance(row, list) and len(row) > 1:
+                                            vals = [v for v in row[1:] if v is not None]
+                                            if vals:
+                                                arc_size = int(vals[0])
+                                                break
+                    except (TrueNASAPIError, TrueNASTimeoutError):
+                        pass
+            except Exception:  # noqa: BLE001
+                _LOGGER.debug("ARC stats not available")
+
         # Try to get CPU temperature
         if cpu_temp is None:
             try:
+                now = int(time_mod.time())
                 temps = await self._send_request("reporting.get_data", [
                     [{"name": "cputemp"}],
-                    {"start": int(__import__("time").time()) - 60,
-                     "end": int(__import__("time").time())},
+                    {"start": now - 120, "end": now},
                 ])
                 if isinstance(temps, list) and temps:
                     report = temps[0]
                     if isinstance(report, dict):
                         data_points = report.get("data", [])
                         if data_points:
-                            last = data_points[-1]
-                            if isinstance(last, list) and len(last) > 1:
-                                vals = [v for v in last[1:] if v is not None]
-                                if vals:
-                                    cpu_temp = round(sum(vals) / len(vals), 1)
+                            for row in reversed(data_points):
+                                if isinstance(row, list) and len(row) > 1:
+                                    vals = [v for v in row[1:] if v is not None]
+                                    if vals:
+                                        cpu_temp = round(sum(vals) / len(vals), 1)
+                                        break
             except (TrueNASAPIError, TrueNASTimeoutError):
                 _LOGGER.debug("CPU temperature not available")
+
+        _LOGGER.debug(
+            "System stats: cpu=%.1f%%, mem=%d/%d (%.1f%%), arc=%d, temp=%s",
+            cpu_usage, mem_used, mem_total, mem_pct, arc_size, cpu_temp,
+        )
 
         return SystemStats(
             cpu_usage=cpu_usage,

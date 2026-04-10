@@ -16,7 +16,6 @@ from homeassistant.components.sensor import (
 from homeassistant.const import (
     PERCENTAGE,
     EntityCategory,
-    UnitOfDataRate,
     UnitOfInformation,
     UnitOfTemperature,
 )
@@ -28,10 +27,9 @@ from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
 from .entity import (
     DEVICE_KEY_APPS,
     DEVICE_KEY_CLOUDSYNC,
-    DEVICE_KEY_DATASETS,
-    DEVICE_KEY_DISKS,
     DEVICE_KEY_REPLICATION,
     DEVICE_KEY_SNAPSHOTS,
+    DEVICE_KEY_STORAGE,
     DEVICE_KEY_SYSTEM,
     DEVICE_KEY_VMS,
     TrueNASEntity,
@@ -43,7 +41,7 @@ from .models import TrueNASData
 class TrueNASSensorEntityDescription(SensorEntityDescription):
     """Describes a TrueNAS sensor entity."""
 
-    value_fn: Callable[[TrueNASData], StateType] = lambda _: None
+    value_fn: Callable[[TrueNASData], StateType | datetime] = lambda _: None
     extra_attrs_fn: Callable[[TrueNASData], dict[str, Any]] | None = None
 
 
@@ -53,6 +51,7 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
     TrueNASSensorEntityDescription(
         key="cpu_usage",
         translation_key="cpu_usage",
+        name="CPU usage",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
@@ -64,6 +63,7 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
     TrueNASSensorEntityDescription(
         key="cpu_temperature",
         translation_key="cpu_temperature",
+        name="CPU temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -75,17 +75,19 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
     TrueNASSensorEntityDescription(
         key="memory_usage_percent",
         translation_key="memory_usage_percent",
+        name="Memory usage",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         icon="mdi:memory",
         value_fn=lambda data: data.system_stats.memory_usage_percent
-        if data.system_stats
+        if data.system_stats and data.system_stats.memory_usage_percent > 0
         else None,
     ),
     TrueNASSensorEntityDescription(
         key="memory_used",
         translation_key="memory_used",
+        name="Memory used",
         native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -93,12 +95,13 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         icon="mdi:memory",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: round(data.system_stats.memory_used_bytes / (1024**3), 2)
-        if data.system_stats and data.system_stats.memory_used_bytes
+        if data.system_stats and data.system_stats.memory_used_bytes > 0
         else None,
     ),
     TrueNASSensorEntityDescription(
         key="memory_free",
         translation_key="memory_free",
+        name="Memory free",
         native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -106,12 +109,13 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         icon="mdi:memory",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: round(data.system_stats.memory_free_bytes / (1024**3), 2)
-        if data.system_stats and data.system_stats.memory_free_bytes
+        if data.system_stats and data.system_stats.memory_free_bytes > 0
         else None,
     ),
     TrueNASSensorEntityDescription(
         key="load_avg_1",
         translation_key="load_avg_1",
+        name="Load average (1 min)",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:gauge",
@@ -123,6 +127,7 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
     TrueNASSensorEntityDescription(
         key="load_avg_5",
         translation_key="load_avg_5",
+        name="Load average (5 min)",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:gauge",
@@ -134,6 +139,7 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
     TrueNASSensorEntityDescription(
         key="load_avg_15",
         translation_key="load_avg_15",
+        name="Load average (15 min)",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:gauge",
@@ -145,17 +151,19 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
     TrueNASSensorEntityDescription(
         key="uptime",
         translation_key="uptime",
+        name="Uptime",
         device_class=SensorDeviceClass.TIMESTAMP,
         icon="mdi:clock-outline",
         value_fn=lambda data: (
             datetime.now(tz=UTC) - timedelta(seconds=data.system_info.uptime_seconds)
-        ).isoformat()
-        if data.system_info
+        )
+        if data.system_info and data.system_info.uptime_seconds > 0
         else None,
     ),
     TrueNASSensorEntityDescription(
         key="arc_size",
         translation_key="arc_size",
+        name="ARC size",
         native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -163,24 +171,26 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         icon="mdi:database",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: round(data.system_stats.arc_size / (1024**3), 2)
-        if data.system_stats and data.system_stats.arc_size
+        if data.system_stats and data.system_stats.arc_size > 0
         else None,
     ),
     TrueNASSensorEntityDescription(
         key="arc_hit_ratio",
         translation_key="arc_hit_ratio",
+        name="ARC hit ratio",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         icon="mdi:bullseye-arrow",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.system_stats.arc_hit_ratio
-        if data.system_stats
+        if data.system_stats and data.system_stats.arc_hit_ratio > 0
         else None,
     ),
     TrueNASSensorEntityDescription(
         key="alerts",
         translation_key="alerts",
+        name="Active alerts",
         icon="mdi:alert-circle",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: len([a for a in data.alerts if not a.dismissed]),
@@ -211,19 +221,19 @@ async def async_setup_entry(
     # Pool sensors
     for pool in coordinator.data.pools:
         for desc in _pool_sensors(pool.name):
-            entities.append(TrueNASSensor(coordinator, desc, f"pool_{pool.name}"))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_STORAGE))
 
     # Disk sensors
     for disk in coordinator.data.disks:
         for desc in _disk_sensors(disk.name):
-            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_DISKS))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_STORAGE))
 
-    # Dataset sensors (only enable top-level datasets by default, depth <= 2)
+    # Dataset sensors (only enable top-level datasets by default, depth <= 1)
     for dataset in coordinator.data.datasets:
         depth = dataset.id.count("/")
         enabled = depth <= 1  # e.g. "nvme" (0) and "nvme/Docker" (1)
         for desc in _dataset_sensors(dataset.id, enabled_default=enabled):
-            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_DATASETS))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_STORAGE))
 
     # Network interface sensors
     for iface in coordinator.data.network_interfaces:
@@ -262,7 +272,7 @@ class TrueNASSensor(TrueNASEntity, SensorEntity):
     entity_description: TrueNASSensorEntityDescription
 
     @property
-    def native_value(self) -> StateType:
+    def native_value(self) -> StateType | datetime:
         """Return the sensor value."""
         return self.entity_description.value_fn(self.coordinator.data)
 
@@ -287,6 +297,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_status",
             translation_key="pool_status",
+            name=f"Pool {pool_name} status",
             icon="mdi:database",
             value_fn=lambda data, _p=pool_name: (
                 p.status if (p := _find_pool(data)) else None
@@ -302,6 +313,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_used",
             translation_key="pool_used",
+            name=f"Pool {pool_name} used",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -314,6 +326,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_free",
             translation_key="pool_free",
+            name=f"Pool {pool_name} free",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -326,6 +339,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_total",
             translation_key="pool_total",
+            name=f"Pool {pool_name} total",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -339,6 +353,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_usage",
             translation_key="pool_usage_percent",
+            name=f"Pool {pool_name} usage",
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=1,
@@ -352,6 +367,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_fragmentation",
             translation_key="pool_fragmentation",
+            name=f"Pool {pool_name} fragmentation",
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
             icon="mdi:chart-bubble",
@@ -373,6 +389,7 @@ def _disk_sensors(disk_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         TrueNASSensorEntityDescription(
             key=f"disk_{disk_name}_temperature",
             translation_key="disk_temperature",
+            name=f"Disk {disk_name} temperature",
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             device_class=SensorDeviceClass.TEMPERATURE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -380,6 +397,13 @@ def _disk_sensors(disk_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             value_fn=lambda data, _d=disk_name: d.temperature
             if (d := _find_disk(data)) and d.temperature is not None
             else None,
+            extra_attrs_fn=lambda data, _d=disk_name: {
+                "model": d.model,
+                "serial": d.serial,
+                "type": d.type,
+            }
+            if (d := _find_disk(data))
+            else {},
         ),
     )
 
@@ -399,6 +423,7 @@ def _dataset_sensors(
         TrueNASSensorEntityDescription(
             key=f"dataset_{safe_id}_used",
             translation_key="dataset_used",
+            name=f"{dataset_id} used",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -422,6 +447,7 @@ def _dataset_sensors(
         TrueNASSensorEntityDescription(
             key=f"dataset_{safe_id}_available",
             translation_key="dataset_available",
+            name=f"{dataset_id} available",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -437,6 +463,7 @@ def _dataset_sensors(
         TrueNASSensorEntityDescription(
             key=f"dataset_{safe_id}_usage",
             translation_key="dataset_usage_percent",
+            name=f"{dataset_id} usage",
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=1,
@@ -466,6 +493,7 @@ def _network_sensors(
         TrueNASSensorEntityDescription(
             key=f"net_{iface_name}_received",
             translation_key="net_received",
+            name=f"{iface_name} received",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
             state_class=SensorStateClass.TOTAL_INCREASING,
@@ -481,6 +509,7 @@ def _network_sensors(
         TrueNASSensorEntityDescription(
             key=f"net_{iface_name}_sent",
             translation_key="net_sent",
+            name=f"{iface_name} sent",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
             state_class=SensorStateClass.TOTAL_INCREASING,
@@ -506,6 +535,7 @@ def _app_sensors(app_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         TrueNASSensorEntityDescription(
             key=f"app_{app_name}_status",
             translation_key="app_status",
+            name=f"{app_name}",
             icon="mdi:application",
             value_fn=lambda data, _a=app_name: a.state
             if (a := _find_app(data))
@@ -532,6 +562,7 @@ def _vm_sensors(
         TrueNASSensorEntityDescription(
             key=f"vm_{vm_id}_status",
             translation_key="vm_status",
+            name=f"{vm_name}",
             icon="mdi:monitor",
             value_fn=lambda data, _id=vm_id: v.status
             if (v := _find_vm(data))
@@ -561,6 +592,7 @@ def _replication_sensors(
         TrueNASSensorEntityDescription(
             key=f"replication_{task_id}_status",
             translation_key="replication_status",
+            name=f"{task_name}",
             icon="mdi:swap-horizontal",
             value_fn=lambda data, _id=task_id: t.state
             if (t := _find_task(data))
@@ -591,6 +623,7 @@ def _snapshot_task_sensors(
         TrueNASSensorEntityDescription(
             key=f"snapshottask_{task_id}_status",
             translation_key="snapshot_task_status",
+            name=f"{dataset}",
             icon="mdi:camera",
             value_fn=lambda data, _id=task_id: t.state
             if (t := _find_task(data))
@@ -621,6 +654,7 @@ def _cloudsync_sensors(
         TrueNASSensorEntityDescription(
             key=f"cloudsync_{task_id}_status",
             translation_key="cloudsync_status",
+            name=f"{description or f'Task {task_id}'}",
             icon="mdi:cloud-sync",
             value_fn=lambda data, _id=task_id: t.state
             if (t := _find_task(data))

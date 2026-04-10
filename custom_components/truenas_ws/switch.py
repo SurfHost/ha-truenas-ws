@@ -68,7 +68,7 @@ class TrueNASServiceSwitch(TrueNASEntity, SwitchEntity):
     @property
     def name(self) -> str:
         """Return the name of the switch."""
-        return f"Service: {self._service_name}"
+        return f"{self._service_name}"
 
     @property
     def is_on(self) -> bool:

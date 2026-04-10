@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
-from .entity import DEVICE_KEY_DISKS, DEVICE_KEY_SYSTEM, TrueNASEntity
+from .entity import DEVICE_KEY_STORAGE, DEVICE_KEY_SYSTEM, TrueNASEntity
 from .models import TrueNASData
 
 
@@ -34,6 +34,7 @@ SYSTEM_BINARY_SENSORS: tuple[TrueNASBinarySensorEntityDescription, ...] = (
     TrueNASBinarySensorEntityDescription(
         key="system_healthy",
         translation_key="system_healthy",
+        name="System problem",
         device_class=BinarySensorDeviceClass.PROBLEM,
         icon="mdi:check-network",
         value_fn=lambda data: len([a for a in data.alerts if not a.dismissed and a.level in ("CRITICAL", "ERROR")]) > 0,
@@ -41,6 +42,7 @@ SYSTEM_BINARY_SENSORS: tuple[TrueNASBinarySensorEntityDescription, ...] = (
     TrueNASBinarySensorEntityDescription(
         key="update_available",
         translation_key="update_available",
+        name="Update available",
         device_class=BinarySensorDeviceClass.UPDATE,
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:update",
@@ -69,6 +71,7 @@ async def async_setup_entry(
         desc = TrueNASBinarySensorEntityDescription(
             key=f"pool_{pool.name}_healthy",
             translation_key="pool_healthy",
+            name=f"Pool {pool.name} problem",
             device_class=BinarySensorDeviceClass.PROBLEM,
             icon="mdi:database-check",
             value_fn=lambda data, _name=pool.name: not p.healthy
@@ -81,20 +84,21 @@ async def async_setup_entry(
             if (p := next((x for x in data.pools if x.name == _name), None))
             else {},
         )
-        entities.append(TrueNASBinarySensor(coordinator, desc, f"pool_{pool.name}"))
+        entities.append(TrueNASBinarySensor(coordinator, desc, DEVICE_KEY_STORAGE))
 
     # Disk SMART health
     for disk in coordinator.data.disks:
         desc = TrueNASBinarySensorEntityDescription(
             key=f"disk_{disk.name}_smart_healthy",
             translation_key="disk_smart_healthy",
+            name=f"Disk {disk.name} problem",
             device_class=BinarySensorDeviceClass.PROBLEM,
             icon="mdi:harddisk",
             entity_category=EntityCategory.DIAGNOSTIC,
             value_fn=lambda data, _name=disk.name: False,  # placeholder - SMART needs separate query
         )
         entities.append(
-            TrueNASBinarySensor(coordinator, desc, DEVICE_KEY_DISKS)
+            TrueNASBinarySensor(coordinator, desc, DEVICE_KEY_STORAGE)
         )
 
     async_add_entities(entities)

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.3] - 2026-04-11
+
+### Fixed
+
+- Entity names now include the resource name (app name, disk name, dataset path, etc.) so they are identifiable within grouped devices
+- Uptime sensor: return proper datetime object instead of string (fixes "niet beschikbaar" error)
+- Memory/ARC stats: improved fallback chain with multiple reporting API formats (reporting.realtime, reporting.get_data, reporting.netdata_get_data)
+- Memory sensors: fixed value checks that treated 0 as unavailable
+
+### Changed
+
+- Combined Disks, Pools, and Datasets into a single "Storage" device
+- Service switch names simplified (removed "Service:" prefix since they're under the Services device)
+- Added debug logging for system stats to help diagnose data fetching issues
+
 ## [0.1.2] - 2026-04-10
 
 ### Changed

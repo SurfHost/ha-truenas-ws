@@ -11,9 +11,8 @@ from .coordinator import TrueNASDataUpdateCoordinator
 
 # Group device keys — all entities of the same type go under one device
 DEVICE_KEY_SYSTEM = "system"
+DEVICE_KEY_STORAGE = "storage"
 DEVICE_KEY_APPS = "apps"
-DEVICE_KEY_DISKS = "disks"
-DEVICE_KEY_DATASETS = "datasets"
 DEVICE_KEY_SERVICES = "services"
 DEVICE_KEY_VMS = "vms"
 DEVICE_KEY_REPLICATION = "replication"
@@ -56,40 +55,21 @@ class TrueNASEntity(CoordinatorEntity[TrueNASDataUpdateCoordinator]):
                 sw_version=sys_info.version if sys_info else None,
             )
 
+        if self._device_key == DEVICE_KEY_STORAGE:
+            return DeviceInfo(
+                identifiers={(DOMAIN, f"{entry_id}_storage")},
+                name="Storage",
+                manufacturer="iXsystems",
+                model="ZFS Storage",
+                via_device=(DOMAIN, f"{entry_id}_system"),
+            )
+
         if self._device_key == DEVICE_KEY_APPS:
             return DeviceInfo(
                 identifiers={(DOMAIN, f"{entry_id}_apps")},
                 name="Apps",
                 manufacturer="iXsystems",
                 model="Applications",
-                via_device=(DOMAIN, f"{entry_id}_system"),
-            )
-
-        if self._device_key == DEVICE_KEY_DISKS:
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{entry_id}_disks")},
-                name="Disks",
-                manufacturer="iXsystems",
-                model="Storage Disks",
-                via_device=(DOMAIN, f"{entry_id}_system"),
-            )
-
-        if self._device_key == DEVICE_KEY_DATASETS:
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{entry_id}_datasets")},
-                name="Datasets",
-                manufacturer="iXsystems",
-                model="ZFS Datasets",
-                via_device=(DOMAIN, f"{entry_id}_system"),
-            )
-
-        if self._device_key.startswith("pool_"):
-            pool_name = self._device_key.removeprefix("pool_")
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{entry_id}_pool_{pool_name}")},
-                name=f"Pool: {pool_name}",
-                manufacturer="iXsystems",
-                model="ZFS Pool",
                 via_device=(DOMAIN, f"{entry_id}_system"),
             )
 

@@ -12,7 +12,7 @@ from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
-from .entity import DEVICE_KEY_DATASETS, DEVICE_KEY_SYSTEM, TrueNASEntity
+from .entity import DEVICE_KEY_STORAGE, DEVICE_KEY_SYSTEM, TrueNASEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ class TrueNASSnapshotButton(TrueNASEntity, ButtonEntity):
             key=f"snapshot_{safe_id}",
             translation_key="create_snapshot",
         )
-        super().__init__(coordinator, description, DEVICE_KEY_DATASETS)
+        super().__init__(coordinator, description, DEVICE_KEY_STORAGE)
         self._dataset_id = dataset_id
 
     @property
