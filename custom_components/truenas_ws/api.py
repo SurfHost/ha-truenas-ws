@@ -401,82 +401,138 @@ class TrueNASWebSocketClient:
         return SystemInfo.from_api(result)
 
     async def get_system_stats(self) -> SystemStats:
-        """Get real-time system statistics."""
-        reporting_data: dict[str, Any] = {}
-        memory_data: dict[str, Any] = {}
+        """Get real-time system statistics using multiple API methods."""
+        cpu_usage = 0.0
+        mem_total = 0
+        mem_used = 0
+        mem_free = 0
+        mem_pct = 0.0
+        arc_size = 0
+        arc_max = 0
+        arc_hit = 0.0
+        cpu_temp: float | None = None
 
+        # Try reporting.realtime first (TrueNAS 25.04+)
+        realtime_worked = False
         try:
-            reporting_result = await self._send_request(
-                "reporting.realtime"
-            )
-            if isinstance(reporting_result, dict):
-                reporting_data = reporting_result
+            result = await self._send_request("reporting.realtime")
+            if isinstance(result, dict):
+                realtime_worked = True
+                # CPU usage
+                cpu_raw = result.get("cpu", {})
+                if isinstance(cpu_raw, dict):
+                    total = 0.0
+                    count = 0
+                    for key, val in cpu_raw.items():
+                        if key.isdigit() and isinstance(val, dict):
+                            total += float(val.get("usage", 0))
+                            count += 1
+                        elif key == "usage":
+                            cpu_usage = float(val)
+                            count = 0
+                            break
+                    if count > 0:
+                        cpu_usage = total / count
 
-                if "cpu" in reporting_data:
-                    cpu_raw = reporting_data["cpu"]
-                    if isinstance(cpu_raw, dict):
-                        total_usage = 0.0
-                        count = 0
-                        for key, val in cpu_raw.items():
-                            if key.isdigit() and isinstance(val, dict):
-                                total_usage += float(val.get("usage", 0))
-                                count += 1
-                            elif key == "usage":
-                                total_usage = float(val)
-                                count = 1
-                                break
-                        if count > 0:
-                            reporting_data["cpu"] = {"usage": total_usage / count}
+                # Memory
+                mem_raw = result.get("memory", {})
+                if isinstance(mem_raw, dict):
+                    mem_total = int(mem_raw.get("physmem", mem_raw.get("total", 0)))
+                    mem_used = int(mem_raw.get("used", 0))
+                    mem_free = int(mem_raw.get("free", 0))
+                    arc_size = int(mem_raw.get("arc_size", 0))
+                    arc_max = int(mem_raw.get("arc_max", 0))
 
-                if "memory" in reporting_data:
-                    mem = reporting_data["memory"]
-                    if isinstance(mem, dict):
-                        memory_data = {
-                            "total": mem.get("physmem", mem.get("total", 0)),
-                            "used": mem.get("used", 0),
-                            "free": mem.get("free", 0),
-                            "arc_size": mem.get("arc_size", 0),
-                            "arc_max": mem.get("arc_max", 0),
-                        }
+                # CPU temp from realtime
+                cpu_temp_raw = result.get("cpu_temp")
+                if isinstance(cpu_temp_raw, (int, float)):
+                    cpu_temp = float(cpu_temp_raw)
 
-                        total = int(memory_data.get("total", 0))
-                        used = int(memory_data.get("used", 0))
-                        arc_size = int(memory_data.get("arc_size", 0))
-                        arc_max = int(memory_data.get("arc_max", 0))
+        except (TrueNASAPIError, TrueNASTimeoutError):
+            _LOGGER.debug("reporting.realtime not available")
 
-                        if arc_max > 0 and arc_size > 0:
-                            try:
-                                arc_stats = await self._send_request(
-                                    "cache.get", ["arc_stats"]
-                                )
-                                if isinstance(arc_stats, dict):
-                                    hits = int(arc_stats.get("hits", 0))
-                                    misses = int(arc_stats.get("misses", 0))
-                                    total_acc = hits + misses
-                                    if total_acc > 0:
-                                        memory_data["arc_hit_ratio"] = round(
-                                            hits / total_acc * 100, 1
-                                        )
-                            except (TrueNASAPIError, TrueNASTimeoutError):
-                                if total > 0 and used > 0 and arc_size > 0:
-                                    memory_data["arc_hit_ratio"] = 0
+        # Fallback: get system info for memory if realtime didn't work
+        if not realtime_worked or mem_total == 0:
+            try:
+                sysinfo = await self._send_request("system.info")
+                if isinstance(sysinfo, dict):
+                    if mem_total == 0:
+                        mem_total = int(sysinfo.get("physmem", 0))
 
-                if "cpu_temp" not in reporting_data:
-                    try:
-                        temps = await self._send_request(
-                            "disk.temperatures", []
-                        )
-                        if isinstance(temps, dict):
-                            reporting_data["cpu_temp"] = None
-                    except (TrueNASAPIError, TrueNASTimeoutError):
-                        pass
+                    # Calculate CPU usage from load average
+                    cores = int(sysinfo.get("cores", 1)) or 1
+                    loadavg = sysinfo.get("loadavg", [0])
+                    if isinstance(loadavg, list) and loadavg and cpu_usage == 0:
+                        cpu_usage = round(float(loadavg[0]) / cores * 100, 1)
+                        cpu_usage = min(cpu_usage, 100.0)
+            except (TrueNASAPIError, TrueNASTimeoutError):
+                pass
 
-        except (TrueNASAPIError, TrueNASTimeoutError) as err:
-            _LOGGER.debug("Failed to get realtime reporting: %s", err)
+        # Fallback: get memory from reporting.get_data
+        if mem_used == 0 and mem_total > 0:
+            try:
+                import time
+                now = int(time.time())
+                mem_report = await self._send_request(
+                    "reporting.get_data",
+                    [[{"name": "memory"}], {"start": now - 60, "end": now}],
+                )
+                if isinstance(mem_report, list) and mem_report:
+                    report = mem_report[0]
+                    if isinstance(report, dict):
+                        data_points = report.get("data", [])
+                        legend = report.get("legend", [])
+                        if data_points and legend:
+                            last = data_points[-1]
+                            if isinstance(last, list) and len(last) > 1:
+                                # Find used memory column
+                                for i, col in enumerate(legend):
+                                    if col == "used" and i < len(last) and last[i]:
+                                        mem_used = int(float(last[i]))
+                                    elif col == "free" and i < len(last) and last[i]:
+                                        mem_free = int(float(last[i]))
+                                    elif col == "arc_size" and i < len(last) and last[i]:
+                                        arc_size = int(float(last[i]))
+            except (TrueNASAPIError, TrueNASTimeoutError):
+                _LOGGER.debug("reporting.get_data not available for memory")
 
-        return SystemStats.from_api(
-            reporting_data=reporting_data,
-            memory_data=memory_data,
+        # Calculate memory percentage
+        if mem_total > 0 and mem_used > 0:
+            mem_pct = round(mem_used / mem_total * 100, 1)
+        elif mem_total > 0 and mem_free > 0:
+            mem_used = mem_total - mem_free
+            mem_pct = round(mem_used / mem_total * 100, 1)
+
+        # Try to get CPU temperature
+        if cpu_temp is None:
+            try:
+                temps = await self._send_request("reporting.get_data", [
+                    [{"name": "cputemp"}],
+                    {"start": int(__import__("time").time()) - 60,
+                     "end": int(__import__("time").time())},
+                ])
+                if isinstance(temps, list) and temps:
+                    report = temps[0]
+                    if isinstance(report, dict):
+                        data_points = report.get("data", [])
+                        if data_points:
+                            last = data_points[-1]
+                            if isinstance(last, list) and len(last) > 1:
+                                vals = [v for v in last[1:] if v is not None]
+                                if vals:
+                                    cpu_temp = round(sum(vals) / len(vals), 1)
+            except (TrueNASAPIError, TrueNASTimeoutError):
+                _LOGGER.debug("CPU temperature not available")
+
+        return SystemStats(
+            cpu_usage=cpu_usage,
+            memory_usage_percent=mem_pct,
+            memory_used_bytes=mem_used,
+            memory_free_bytes=mem_free,
+            arc_size=arc_size,
+            arc_max=arc_max,
+            arc_hit_ratio=arc_hit,
+            cpu_temperature=cpu_temp,
         )
 
     async def get_disks(self) -> list[DiskInfo]:

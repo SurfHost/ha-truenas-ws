@@ -208,10 +208,12 @@ async def async_setup_entry(
         for desc in _disk_sensors(disk.name):
             entities.append(TrueNASSensor(coordinator, desc, f"disk_{disk.name}"))
 
-    # Dataset sensors
+    # Dataset sensors (only enable top-level datasets by default, depth <= 2)
     for dataset in coordinator.data.datasets:
         pool_name = dataset.pool
-        for desc in _dataset_sensors(dataset.id):
+        depth = dataset.id.count("/")
+        enabled = depth <= 1  # e.g. "nvme" (0) and "nvme/Docker" (1)
+        for desc in _dataset_sensors(dataset.id, enabled_default=enabled):
             entities.append(TrueNASSensor(coordinator, desc, f"pool_{pool_name}"))
 
     # Network interface sensors
@@ -375,9 +377,11 @@ def _disk_sensors(disk_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
 
 def _dataset_sensors(
     dataset_id: str,
+    enabled_default: bool = True,
 ) -> tuple[TrueNASSensorEntityDescription, ...]:
     """Create sensor descriptions for a dataset."""
     safe_id = dataset_id.replace("/", "_")
+    short_name = dataset_id.rsplit("/", 1)[-1]
 
     def _find_dataset(data: TrueNASData) -> Any:
         return next((d for d in data.datasets if d.id == dataset_id), None)
@@ -391,6 +395,7 @@ def _dataset_sensors(
             state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=2,
             icon="mdi:folder",
+            entity_registry_enabled_default=enabled_default,
             value_fn=lambda data, _id=dataset_id: round(
                 ds.used_bytes / (1024**3), 2
             )
@@ -413,6 +418,7 @@ def _dataset_sensors(
             state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=2,
             icon="mdi:folder",
+            entity_registry_enabled_default=enabled_default,
             value_fn=lambda data, _id=dataset_id: round(
                 ds.available_bytes / (1024**3), 2
             )
@@ -426,6 +432,7 @@ def _dataset_sensors(
             state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=1,
             icon="mdi:gauge",
+            entity_registry_enabled_default=enabled_default,
             value_fn=lambda data, _id=dataset_id: round(
                 ds.used_bytes / (ds.used_bytes + ds.available_bytes) * 100, 1
             )

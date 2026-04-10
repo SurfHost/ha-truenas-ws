@@ -93,6 +93,7 @@ class TrueNASSnapshotButton(TrueNASEntity, ButtonEntity):
     """Button to create a ZFS snapshot."""
 
     _attr_icon = "mdi:camera"
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,
