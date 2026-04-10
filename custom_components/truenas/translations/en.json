@@ -1,0 +1,92 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to TrueNAS",
+        "description": "Enter your TrueNAS connection details. Create an API key in TrueNAS under System > API Keys.",
+        "data": {
+          "host": "Host",
+          "api_key": "API Key",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate TrueNAS",
+        "description": "The API key for {title} is no longer valid. Please enter a new API key.",
+        "data": {
+          "api_key": "API Key"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to TrueNAS. Check the host address and ensure the system is reachable.",
+      "invalid_auth": "Invalid API key. Please check your API key and try again.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This TrueNAS system is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "TrueNAS Options",
+        "data": {
+          "scan_interval": "Update interval (seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cpu_usage": { "name": "CPU usage" },
+      "cpu_temperature": { "name": "CPU temperature" },
+      "memory_usage_percent": { "name": "Memory usage" },
+      "memory_used": { "name": "Memory used" },
+      "memory_free": { "name": "Memory free" },
+      "load_avg_1": { "name": "Load average (1 min)" },
+      "load_avg_5": { "name": "Load average (5 min)" },
+      "load_avg_15": { "name": "Load average (15 min)" },
+      "uptime": { "name": "Uptime" },
+      "arc_size": { "name": "ARC size" },
+      "arc_hit_ratio": { "name": "ARC hit ratio" },
+      "alerts": { "name": "Active alerts" },
+      "pool_status": { "name": "Status" },
+      "pool_used": { "name": "Used space" },
+      "pool_free": { "name": "Free space" },
+      "pool_total": { "name": "Total size" },
+      "pool_usage_percent": { "name": "Usage" },
+      "pool_fragmentation": { "name": "Fragmentation" },
+      "disk_temperature": { "name": "Temperature" },
+      "dataset_used": { "name": "Used space" },
+      "dataset_available": { "name": "Available space" },
+      "dataset_usage_percent": { "name": "Usage" },
+      "net_received": { "name": "Received" },
+      "net_sent": { "name": "Sent" },
+      "app_status": { "name": "Status" },
+      "vm_status": { "name": "Status" },
+      "replication_status": { "name": "Replication" },
+      "snapshot_task_status": { "name": "Snapshot task" },
+      "cloudsync_status": { "name": "Cloud sync" }
+    },
+    "binary_sensor": {
+      "system_healthy": { "name": "System problem" },
+      "update_available": { "name": "Update available" },
+      "pool_healthy": { "name": "Pool problem" },
+      "disk_smart_healthy": { "name": "Disk problem" }
+    },
+    "switch": {
+      "service": { "name": "Service: {service_name}" },
+      "vm_power": { "name": "Power" },
+      "app_power": { "name": "Power" }
+    },
+    "button": {
+      "system_reboot": { "name": "Reboot" },
+      "system_shutdown": { "name": "Shutdown" },
+      "create_snapshot": { "name": "Create snapshot" }
+    },
+    "update": {
+      "system_update": { "name": "System update" }
+    }
+  }
+}
