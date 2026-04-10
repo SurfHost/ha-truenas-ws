@@ -700,8 +700,76 @@ class TrueNASWebSocketClient:
 
     async def get_network_interfaces(self) -> list[NetworkInterface]:
         """Get network interface information."""
-        result = await self._send_request("interface.query")
-        return [NetworkInterface.from_api(n) for n in result]
+        # Try both API method names
+        try:
+            result = await self._send_request("interface.query")
+        except TrueNASAPIError:
+            result = await self._send_request("network.interface.query")
+
+        interfaces = [NetworkInterface.from_api(n) for n in result]
+
+        # If byte counters are 0, try to get them from reporting
+        needs_stats = any(
+            n.received_bytes == 0 and n.sent_bytes == 0 for n in interfaces
+        )
+        if needs_stats and interfaces:
+            import time as time_mod
+
+            now = int(time_mod.time())
+            for iface in interfaces:
+                try:
+                    report = await self._send_request(
+                        "reporting.get_data",
+                        [
+                            [{"name": "interface", "identifier": iface.name}],
+                            {"start": now - 120, "end": now},
+                        ],
+                    )
+                    if isinstance(report, list) and report:
+                        rep = report[0]
+                        if isinstance(rep, dict):
+                            data_points = rep.get("data", [])
+                            legend = rep.get("legend", [])
+                            _LOGGER.debug(
+                                "Network %s legend: %s, points: %d",
+                                iface.name,
+                                legend,
+                                len(data_points),
+                            )
+                            if data_points and legend:
+                                # Get cumulative totals from last data point
+                                for row in reversed(data_points):
+                                    if isinstance(row, list) and len(row) > 1:
+                                        has_values = any(
+                                            v is not None for v in row[1:]
+                                        )
+                                        if has_values:
+                                            rx = 0
+                                            tx = 0
+                                            for i, col in enumerate(legend):
+                                                if i >= len(row) or row[i] is None:
+                                                    continue
+                                                val = abs(float(row[i]))
+                                                if "received" in col or "in" == col or col == "received_bytes":
+                                                    rx = int(val)
+                                                elif "sent" in col or "out" == col or col == "sent_bytes":
+                                                    tx = int(val)
+                                            if rx > 0 or tx > 0:
+                                                from dataclasses import replace
+
+                                                idx = interfaces.index(iface)
+                                                interfaces[idx] = replace(
+                                                    iface,
+                                                    received_bytes=rx,
+                                                    sent_bytes=tx,
+                                                )
+                                            break
+                except (TrueNASAPIError, TrueNASTimeoutError):
+                    _LOGGER.debug(
+                        "Network reporting for %s not available", iface.name
+                    )
+
+        return interfaces
 
     async def get_services(self) -> list[ServiceInfo]:
         """Get service information."""

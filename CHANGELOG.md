@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5] - 2026-04-11
+
+### Fixed
+
+- Network interface query: try both `interface.query` and `network.interface.query` API methods
+- Network byte counters: fall back to `reporting.get_data` per interface when state doesn't include counters
+
 ## [0.1.4] - 2026-04-11
 
 ### Fixed
