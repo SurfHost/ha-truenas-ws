@@ -414,13 +414,20 @@ class TrueNASWebSocketClient:
         arc_hit = 0.0
         cpu_temp: float | None = None
 
-        # Try reporting.realtime first (TrueNAS 25.04+)
+        # Try reporting.realtime first
         realtime_worked = False
         try:
             result = await self._send_request("reporting.realtime")
             if isinstance(result, dict):
                 realtime_worked = True
-                _LOGGER.debug("reporting.realtime keys: %s", list(result.keys()))
+                # Log once at warning level for debugging
+                if not hasattr(self, "_realtime_logged"):
+                    self._realtime_logged = True
+                    _LOGGER.warning(
+                        "TrueNAS reporting.realtime response keys: %s",
+                        list(result.keys()),
+                    )
+
                 # CPU usage
                 cpu_raw = result.get("cpu", {})
                 if isinstance(cpu_raw, dict):
@@ -437,21 +444,26 @@ class TrueNASWebSocketClient:
                     if count > 0:
                         cpu_usage = total / count
 
-                # Memory
+                # Memory from realtime
                 mem_raw = result.get("memory", {})
                 if isinstance(mem_raw, dict):
-                    _LOGGER.debug("realtime memory keys: %s", list(mem_raw.keys()))
+                    if not hasattr(self, "_mem_logged"):
+                        self._mem_logged = True
+                        _LOGGER.warning(
+                            "TrueNAS realtime memory data: %s", mem_raw,
+                        )
                     mem_total = int(mem_raw.get("physmem", mem_raw.get("total", 0)))
                     mem_used = int(mem_raw.get("used", 0))
                     mem_free = int(mem_raw.get("free", 0))
                     arc_size = int(mem_raw.get("arc_size", 0))
                     arc_max = int(mem_raw.get("arc_max", 0))
+                    if mem_raw.get("arc_hit_ratio"):
+                        arc_hit = float(mem_raw["arc_hit_ratio"])
 
                     # Some TrueNAS versions put memory under 'classes'
                     if mem_used == 0 and "classes" in mem_raw:
                         classes = mem_raw["classes"]
                         if isinstance(classes, dict):
-                            # Sum up wired + active as used, inactive + free as free
                             mem_used = int(classes.get("page_tables", 0)) + \
                                        int(classes.get("arc", 0)) + \
                                        int(classes.get("apps", 0))
@@ -463,8 +475,10 @@ class TrueNASWebSocketClient:
                 if isinstance(cpu_temp_raw, (int, float)):
                     cpu_temp = float(cpu_temp_raw)
 
-        except (TrueNASAPIError, TrueNASTimeoutError):
-            _LOGGER.debug("reporting.realtime not available")
+        except (TrueNASAPIError, TrueNASTimeoutError) as err:
+            if not hasattr(self, "_realtime_logged"):
+                self._realtime_logged = True
+                _LOGGER.warning("reporting.realtime not available: %s", err)
 
         # Fallback: get system info for total memory and CPU
         if not realtime_worked or mem_total == 0:
@@ -495,21 +509,19 @@ class TrueNASWebSocketClient:
                         "reporting.get_data",
                         [[{"name": graph_name}], {"start": now - 120, "end": now}],
                     )
-                    _LOGGER.debug(
-                        "reporting.get_data(%s) response type: %s",
-                        graph_name,
-                        type(mem_report).__name__,
-                    )
+                    if not hasattr(self, "_report_mem_logged"):
+                        self._report_mem_logged = True
+                        _LOGGER.warning(
+                            "TrueNAS reporting.get_data(%s): type=%s, value=%s",
+                            graph_name,
+                            type(mem_report).__name__,
+                            str(mem_report)[:500],
+                        )
                     if isinstance(mem_report, list) and mem_report:
                         report = mem_report[0]
                         if isinstance(report, dict):
                             data_points = report.get("data", [])
                             legend = report.get("legend", [])
-                            _LOGGER.debug(
-                                "Memory report legend: %s, data points: %d",
-                                legend,
-                                len(data_points),
-                            )
                             if data_points and legend:
                                 # Find the last data point with valid values
                                 for row in reversed(data_points):
@@ -634,10 +646,14 @@ class TrueNASWebSocketClient:
             except (TrueNASAPIError, TrueNASTimeoutError):
                 _LOGGER.debug("CPU temperature not available")
 
-        _LOGGER.debug(
-            "System stats: cpu=%.1f%%, mem=%d/%d (%.1f%%), arc=%d, temp=%s",
-            cpu_usage, mem_used, mem_total, mem_pct, arc_size, cpu_temp,
-        )
+        if not hasattr(self, "_stats_logged"):
+            self._stats_logged = True
+            _LOGGER.warning(
+                "TrueNAS stats result: cpu=%.1f%%, mem_used=%d, mem_free=%d, "
+                "mem_total=%d (%.1f%%), arc=%d, arc_hit=%.1f, temp=%s",
+                cpu_usage, mem_used, mem_free, mem_total, mem_pct,
+                arc_size, arc_hit, cpu_temp,
+            )
 
         return SystemStats(
             cpu_usage=cpu_usage,

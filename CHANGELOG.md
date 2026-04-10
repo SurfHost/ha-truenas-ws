@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7] - 2026-04-11
+
+### Changed
+
+- Simplified entity names: "nvme0n1" instead of "Disk nvme0n1 temperature", "nvme status" instead of "Pool nvme status"
+- Added one-time warning-level logs for memory/reporting API responses to help debug missing memory stats
+
 ## [0.1.6] - 2026-04-11
 
 ### Fixed

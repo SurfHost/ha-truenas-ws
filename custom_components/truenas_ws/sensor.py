@@ -296,7 +296,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
     return (
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_status",
-            name=f"Pool {pool_name} status",
+            name=f"{pool_name} status",
             icon="mdi:database",
             value_fn=lambda data, _p=pool_name: (
                 p.status if (p := _find_pool(data)) else None
@@ -311,7 +311,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_used",
-            name=f"Pool {pool_name} used",
+            name=f"{pool_name} used",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -323,7 +323,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_free",
-            name=f"Pool {pool_name} free",
+            name=f"{pool_name} free",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -335,7 +335,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_total",
-            name=f"Pool {pool_name} total",
+            name=f"{pool_name} total",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -348,7 +348,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_usage",
-            name=f"Pool {pool_name} usage",
+            name=f"{pool_name} usage",
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=1,
@@ -361,7 +361,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_fragmentation",
-            name=f"Pool {pool_name} fragmentation",
+            name=f"{pool_name} fragmentation",
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
             icon="mdi:chart-bubble",
@@ -382,7 +382,7 @@ def _disk_sensors(disk_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
     return (
         TrueNASSensorEntityDescription(
             key=f"disk_{disk_name}_temperature",
-            name=f"Disk {disk_name} temperature",
+            name=f"{disk_name}",
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             device_class=SensorDeviceClass.TEMPERATURE,
             state_class=SensorStateClass.MEASUREMENT,
