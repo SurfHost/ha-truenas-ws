@@ -41,7 +41,7 @@ Custom Home Assistant integration for TrueNAS SCALE using the modern **JSON-RPC 
 
 1. Open HACS in Home Assistant
 2. Click the three dots menu → **Custom repositories**
-3. Add `SurfHost/ha-truenas` with category **Integration**
+3. Add `SurfHost/ha-truenas-ws` with category **Integration**
 4. Search for "TrueNAS" and install
 5. Restart Home Assistant
 
