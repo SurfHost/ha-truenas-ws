@@ -296,7 +296,6 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
     return (
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_status",
-            translation_key="pool_status",
             name=f"Pool {pool_name} status",
             icon="mdi:database",
             value_fn=lambda data, _p=pool_name: (
@@ -312,7 +311,6 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_used",
-            translation_key="pool_used",
             name=f"Pool {pool_name} used",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
@@ -325,7 +323,6 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_free",
-            translation_key="pool_free",
             name=f"Pool {pool_name} free",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
@@ -338,7 +335,6 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_total",
-            translation_key="pool_total",
             name=f"Pool {pool_name} total",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
@@ -352,7 +348,6 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_usage",
-            translation_key="pool_usage_percent",
             name=f"Pool {pool_name} usage",
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -366,7 +361,6 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_fragmentation",
-            translation_key="pool_fragmentation",
             name=f"Pool {pool_name} fragmentation",
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -388,7 +382,6 @@ def _disk_sensors(disk_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
     return (
         TrueNASSensorEntityDescription(
             key=f"disk_{disk_name}_temperature",
-            translation_key="disk_temperature",
             name=f"Disk {disk_name} temperature",
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
             device_class=SensorDeviceClass.TEMPERATURE,
@@ -422,7 +415,6 @@ def _dataset_sensors(
     return (
         TrueNASSensorEntityDescription(
             key=f"dataset_{safe_id}_used",
-            translation_key="dataset_used",
             name=f"{dataset_id} used",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
@@ -446,7 +438,6 @@ def _dataset_sensors(
         ),
         TrueNASSensorEntityDescription(
             key=f"dataset_{safe_id}_available",
-            translation_key="dataset_available",
             name=f"{dataset_id} available",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
@@ -462,7 +453,6 @@ def _dataset_sensors(
         ),
         TrueNASSensorEntityDescription(
             key=f"dataset_{safe_id}_usage",
-            translation_key="dataset_usage_percent",
             name=f"{dataset_id} usage",
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
@@ -492,7 +482,6 @@ def _network_sensors(
     return (
         TrueNASSensorEntityDescription(
             key=f"net_{iface_name}_received",
-            translation_key="net_received",
             name=f"{iface_name} received",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
@@ -508,7 +497,6 @@ def _network_sensors(
         ),
         TrueNASSensorEntityDescription(
             key=f"net_{iface_name}_sent",
-            translation_key="net_sent",
             name=f"{iface_name} sent",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
@@ -534,7 +522,6 @@ def _app_sensors(app_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
     return (
         TrueNASSensorEntityDescription(
             key=f"app_{app_name}_status",
-            translation_key="app_status",
             name=f"{app_name}",
             icon="mdi:application",
             value_fn=lambda data, _a=app_name: a.state
@@ -561,7 +548,6 @@ def _vm_sensors(
     return (
         TrueNASSensorEntityDescription(
             key=f"vm_{vm_id}_status",
-            translation_key="vm_status",
             name=f"{vm_name}",
             icon="mdi:monitor",
             value_fn=lambda data, _id=vm_id: v.status
@@ -591,7 +577,6 @@ def _replication_sensors(
     return (
         TrueNASSensorEntityDescription(
             key=f"replication_{task_id}_status",
-            translation_key="replication_status",
             name=f"{task_name}",
             icon="mdi:swap-horizontal",
             value_fn=lambda data, _id=task_id: t.state
@@ -622,7 +607,6 @@ def _snapshot_task_sensors(
     return (
         TrueNASSensorEntityDescription(
             key=f"snapshottask_{task_id}_status",
-            translation_key="snapshot_task_status",
             name=f"{dataset}",
             icon="mdi:camera",
             value_fn=lambda data, _id=task_id: t.state
@@ -653,7 +637,6 @@ def _cloudsync_sensors(
     return (
         TrueNASSensorEntityDescription(
             key=f"cloudsync_{task_id}_status",
-            translation_key="cloudsync_status",
             name=f"{description or f'Task {task_id}'}",
             icon="mdi:cloud-sync",
             value_fn=lambda data, _id=task_id: t.state

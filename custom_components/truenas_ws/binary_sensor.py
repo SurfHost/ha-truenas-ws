@@ -70,7 +70,6 @@ async def async_setup_entry(
     for pool in coordinator.data.pools:
         desc = TrueNASBinarySensorEntityDescription(
             key=f"pool_{pool.name}_healthy",
-            translation_key="pool_healthy",
             name=f"Pool {pool.name} problem",
             device_class=BinarySensorDeviceClass.PROBLEM,
             icon="mdi:database-check",
@@ -90,7 +89,6 @@ async def async_setup_entry(
     for disk in coordinator.data.disks:
         desc = TrueNASBinarySensorEntityDescription(
             key=f"disk_{disk.name}_smart_healthy",
-            translation_key="disk_smart_healthy",
             name=f"Disk {disk.name} problem",
             device_class=BinarySensorDeviceClass.PROBLEM,
             icon="mdi:harddisk",

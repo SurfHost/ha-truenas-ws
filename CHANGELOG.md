@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.4] - 2026-04-11
+
+### Fixed
+
+- Entity names now actually show resource names (removed `translation_key` from per-resource descriptions which was overriding the `name` field)
+- Storage sensors show: "Pool nvme status", "Disk sda temperature", "nvme/Docker used", etc.
+- App sensors show: "mealie", "sonarr", etc. instead of generic "Status"
+
 ## [0.1.3] - 2026-04-11
 
 ### Fixed
