@@ -73,14 +73,16 @@ class TrueNASWebSocketClient:
         return self._connected
 
     def _build_urls(self) -> list[str]:
-        """Return WebSocket URLs to try, in order."""
-        urls: list[str] = []
-        # Always try wss:// first (TrueNAS uses HTTPS by default)
-        urls.append(f"wss://{self._host}/api/current")
-        urls.append(f"wss://{self._host}/websocket")
-        # Fallback to ws:// if SSL is not required
+        """Return WebSocket URLs to try, in order.
+
+        Prefer /api/current (JSON-RPC 2.0) over /websocket (legacy DDP).
+        Try both wss:// and ws:// for each endpoint before moving to the next.
+        """
+        urls: list[str] = [f"wss://{self._host}/api/current"]
         if not self._verify_ssl:
             urls.append(f"ws://{self._host}/api/current")
+        urls.append(f"wss://{self._host}/websocket")
+        if not self._verify_ssl:
             urls.append(f"ws://{self._host}/websocket")
         return urls
 
