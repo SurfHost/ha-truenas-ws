@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.1] - 2026-04-10
+
+### Fixed
+
+- Connection: always try wss:// first, support both `/api/current` (JSON-RPC 2.0) and `/websocket` (legacy DDP)
+- CPU/memory stats: fallback chain using system.info and reporting.get_data when reporting.realtime unavailable
+- CPU temperature: fetch from reporting cputemp data
+- Parse boottime as dict format from TrueNAS API
+
+### Changed
+
+- Snapshot buttons disabled by default (enable per dataset as needed)
+- Deep dataset sensors (depth > 2) disabled by default to reduce clutter
+- Top-level datasets still enabled automatically
+
 ## [0.1.0] - 2026-04-10
 
 ### Added
