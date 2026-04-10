@@ -26,10 +26,24 @@ class SystemInfo:
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> Self:
         """Create from API response."""
+        # boottime can be a float, int, or dict like {"$date": "..."}
+        boottime_raw = data.get("boottime", 0)
+        if isinstance(boottime_raw, dict):
+            boottime = float(boottime_raw.get("$date", 0))
+        elif isinstance(boottime_raw, (int, float)):
+            boottime = float(boottime_raw)
+        else:
+            boottime = 0.0
+
+        # uptime_seconds can also be missing; calculate from boottime if needed
+        uptime = data.get("uptime_seconds", data.get("uptime", 0))
+        if isinstance(uptime, dict):
+            uptime = 0
+
         return cls(
             hostname=data.get("hostname", ""),
             version=data.get("version", ""),
-            uptime_seconds=int(data.get("uptime_seconds", 0)),
+            uptime_seconds=int(uptime),
             cpu_model=data.get("model", data.get("cpu_model", "")),
             cpu_cores=int(data.get("cores", 0)),
             physical_cores=int(data.get("physical_cores", 0)),
@@ -37,7 +51,7 @@ class SystemInfo:
             load_avg_1=float(data.get("loadavg", [0, 0, 0])[0]),
             load_avg_5=float(data.get("loadavg", [0, 0, 0])[1]),
             load_avg_15=float(data.get("loadavg", [0, 0, 0])[2]),
-            boottime=float(data.get("boottime", 0)),
+            boottime=boottime,
             timezone=data.get("timezone", "UTC"),
         )
 
