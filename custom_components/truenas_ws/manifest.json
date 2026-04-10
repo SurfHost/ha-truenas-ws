@@ -1,6 +1,6 @@
 {
-  "domain": "truenas",
-  "name": "TrueNAS",
+  "domain": "truenas_ws",
+  "name": "TrueNAS WS",
   "codeowners": [],
   "config_flow": true,
   "dependencies": [],

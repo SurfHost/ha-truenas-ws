@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Final
 
-DOMAIN: Final = "truenas"
+DOMAIN: Final = "truenas_ws"
 
 CONF_API_KEY: Final = "api_key"
 
