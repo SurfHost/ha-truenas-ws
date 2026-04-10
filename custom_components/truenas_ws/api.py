@@ -505,6 +505,12 @@ class TrueNASWebSocketClient:
                     "reporting.get_data",
                     [[{"name": "memory"}], {"start": now - 120, "end": now}],
                 )
+                if not hasattr(self, "_mem_report_logged"):
+                    self._mem_report_logged = True
+                    _LOGGER.warning(
+                        "TrueNAS reporting.get_data(memory) response: %s",
+                        str(mem_report)[:800],
+                    )
                 if isinstance(mem_report, list) and mem_report:
                     report = mem_report[0]
                     if isinstance(report, dict):
@@ -513,19 +519,40 @@ class TrueNASWebSocketClient:
                         if data_points:
                             if legend:
                                 # Multi-column format with legend
+                                # FreeBSD/TrueNAS may use categories like:
+                                # time, free, active, inactive, wired, cache,
+                                # arc, laundry, buffers, used, etc.
+                                FREE_COLS = {"free", "inactive", "laundry"}
+                                USED_COLS = {"used", "active", "wired", "cache", "arc", "buffers"}
                                 for row in reversed(data_points):
                                     if isinstance(row, list) and len(row) > 1:
                                         if any(v is not None for v in row[1:]):
+                                            col_vals: dict[str, float] = {}
                                             for i, col in enumerate(legend):
                                                 if i >= len(row) or row[i] is None:
                                                     continue
-                                                val = float(row[i])
-                                                if col == "used":
-                                                    mem_used = int(val)
-                                                elif col == "free":
-                                                    mem_free = int(val)
-                                                elif col == "arc_size":
-                                                    arc_size = int(val)
+                                                col_vals[col.lower()] = float(row[i])
+
+                                            # Direct "used" column
+                                            if "used" in col_vals:
+                                                mem_used = int(col_vals["used"])
+                                            else:
+                                                # Sum all non-free, non-time columns as "used"
+                                                total_used = 0.0
+                                                for col_name, val in col_vals.items():
+                                                    if col_name in ("time",):
+                                                        continue
+                                                    if col_name not in FREE_COLS:
+                                                        total_used += val
+                                                if total_used > 0:
+                                                    mem_used = int(total_used)
+
+                                            if "free" in col_vals:
+                                                mem_free = int(col_vals["free"])
+
+                                            if "arc" in col_vals and arc_size == 0:
+                                                arc_size = int(col_vals["arc"])
+
                                             break
                             else:
                                 # Simple format: [[timestamp, value], ...]
@@ -571,10 +598,26 @@ class TrueNASWebSocketClient:
                 except (TrueNASAPIError, TrueNASTimeoutError):
                     pass
 
-        # ARC hit ratio
+        # One-time: discover available reporting graphs
+        if not hasattr(self, "_graphs_logged"):
+            self._graphs_logged = True
+            try:
+                graphs = await self._send_request("reporting.graphs")
+                if isinstance(graphs, list):
+                    graph_names = [
+                        g.get("name", "?") for g in graphs if isinstance(g, dict)
+                    ]
+                    _LOGGER.warning(
+                        "TrueNAS available reporting graphs: %s", graph_names,
+                    )
+            except (TrueNASAPIError, TrueNASTimeoutError):
+                _LOGGER.debug("reporting.graphs not available")
+
+        # ARC hit ratio — try to get from reporting graphs
         if arc_hit == 0.0:
             now = int(time_mod.time())
-            for graph_name in ("arcrate", "zfs_arc_rate", "architratio"):
+            # Try known graph names for ARC hit ratio
+            for graph_name in ("arcrate", "zfs_arc_rate", "architratio", "arc"):
                 if arc_hit > 0:
                     break
                 try:
@@ -582,6 +625,13 @@ class TrueNASWebSocketClient:
                         "reporting.get_data",
                         [[{"name": graph_name}], {"start": now - 120, "end": now}],
                     )
+                    if not hasattr(self, "_arc_hit_logged"):
+                        self._arc_hit_logged = True
+                        _LOGGER.warning(
+                            "TrueNAS reporting.get_data(%s) for ARC hit: %s",
+                            graph_name,
+                            str(hit_report)[:500],
+                        )
                     if isinstance(hit_report, list) and hit_report:
                         report = hit_report[0]
                         if isinstance(report, dict):

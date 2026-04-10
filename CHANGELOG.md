@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.9] - 2026-04-11
+
+### Fixed
+
+- Memory stats: handle FreeBSD memory categories (active, wired, cache, arc, etc.) — sum non-free columns when no "used" column exists
+- Added diagnostic logging for `reporting.get_data(memory)` response to debug memory parsing
+- Added one-time `reporting.graphs` discovery to identify available graph names
+- ARC hit ratio: added "arc" to graph name fallback list, added diagnostic logging
+
 ## [0.1.8] - 2026-04-11
 
 ### Fixed
