@@ -1,7 +1,7 @@
 {
   "domain": "truenas_ws",
   "name": "TrueNAS WS",
-  "codeowners": [],
+  "codeowners": ["@SurfHost"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/SurfHost/ha-truenas-ws",
