@@ -8,7 +8,7 @@ from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
-from .entity import TrueNASEntity
+from .entity import DEVICE_KEY_SYSTEM, TrueNASEntity
 
 
 async def async_setup_entry(
@@ -32,7 +32,7 @@ class TrueNASUpdateEntity(TrueNASEntity, UpdateEntity):
             key="system_update",
             translation_key="system_update",
         )
-        super().__init__(coordinator, description, "system")
+        super().__init__(coordinator, description, DEVICE_KEY_SYSTEM)
 
     @property
     def name(self) -> str:

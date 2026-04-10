@@ -9,6 +9,17 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import TrueNASDataUpdateCoordinator
 
+# Group device keys — all entities of the same type go under one device
+DEVICE_KEY_SYSTEM = "system"
+DEVICE_KEY_APPS = "apps"
+DEVICE_KEY_DISKS = "disks"
+DEVICE_KEY_DATASETS = "datasets"
+DEVICE_KEY_SERVICES = "services"
+DEVICE_KEY_VMS = "vms"
+DEVICE_KEY_REPLICATION = "replication"
+DEVICE_KEY_SNAPSHOTS = "snapshot_tasks"
+DEVICE_KEY_CLOUDSYNC = "cloudsync"
+
 
 class TrueNASEntity(CoordinatorEntity[TrueNASDataUpdateCoordinator]):
     """Base entity for TrueNAS."""
@@ -36,13 +47,40 @@ class TrueNASEntity(CoordinatorEntity[TrueNASDataUpdateCoordinator]):
         sys_info = self.coordinator.data.system_info if self.coordinator.data else None
         hostname = sys_info.hostname if sys_info else self.coordinator.config_entry.title
 
-        if self._device_key == "system":
+        if self._device_key == DEVICE_KEY_SYSTEM:
             return DeviceInfo(
-                identifiers={(DOMAIN, entry_id)},
-                name=hostname,
+                identifiers={(DOMAIN, f"{entry_id}_system")},
+                name=f"{hostname}",
                 manufacturer="iXsystems",
                 model="TrueNAS",
                 sw_version=sys_info.version if sys_info else None,
+            )
+
+        if self._device_key == DEVICE_KEY_APPS:
+            return DeviceInfo(
+                identifiers={(DOMAIN, f"{entry_id}_apps")},
+                name="Apps",
+                manufacturer="iXsystems",
+                model="Applications",
+                via_device=(DOMAIN, f"{entry_id}_system"),
+            )
+
+        if self._device_key == DEVICE_KEY_DISKS:
+            return DeviceInfo(
+                identifiers={(DOMAIN, f"{entry_id}_disks")},
+                name="Disks",
+                manufacturer="iXsystems",
+                model="Storage Disks",
+                via_device=(DOMAIN, f"{entry_id}_system"),
+            )
+
+        if self._device_key == DEVICE_KEY_DATASETS:
+            return DeviceInfo(
+                identifiers={(DOMAIN, f"{entry_id}_datasets")},
+                name="Datasets",
+                manufacturer="iXsystems",
+                model="ZFS Datasets",
+                via_device=(DOMAIN, f"{entry_id}_system"),
             )
 
         if self._device_key.startswith("pool_"):
@@ -52,46 +90,56 @@ class TrueNASEntity(CoordinatorEntity[TrueNASDataUpdateCoordinator]):
                 name=f"Pool: {pool_name}",
                 manufacturer="iXsystems",
                 model="ZFS Pool",
-                via_device=(DOMAIN, entry_id),
+                via_device=(DOMAIN, f"{entry_id}_system"),
             )
 
-        if self._device_key.startswith("disk_"):
-            disk_name = self._device_key.removeprefix("disk_")
-            disk = next(
-                (d for d in (self.coordinator.data.disks if self.coordinator.data else [])
-                 if d.name == disk_name),
-                None,
-            )
+        if self._device_key == DEVICE_KEY_SERVICES:
             return DeviceInfo(
-                identifiers={(DOMAIN, f"{entry_id}_disk_{disk_name}")},
-                name=f"Disk: {disk_name}",
-                manufacturer=disk.model.split()[0] if disk and disk.model else None,
-                model=disk.model if disk else None,
-                serial_number=disk.serial if disk else None,
-                via_device=(DOMAIN, entry_id),
-            )
-
-        if self._device_key.startswith("app_"):
-            app_name = self._device_key.removeprefix("app_")
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{entry_id}_app_{app_name}")},
-                name=f"App: {app_name}",
+                identifiers={(DOMAIN, f"{entry_id}_services")},
+                name="Services",
                 manufacturer="iXsystems",
-                model="Application",
-                via_device=(DOMAIN, entry_id),
+                model="System Services",
+                via_device=(DOMAIN, f"{entry_id}_system"),
             )
 
-        if self._device_key.startswith("vm_"):
-            vm_name = self._device_key.removeprefix("vm_")
+        if self._device_key == DEVICE_KEY_VMS:
             return DeviceInfo(
-                identifiers={(DOMAIN, f"{entry_id}_vm_{vm_name}")},
-                name=f"VM: {vm_name}",
+                identifiers={(DOMAIN, f"{entry_id}_vms")},
+                name="Virtual Machines",
                 manufacturer="iXsystems",
-                model="Virtual Machine",
-                via_device=(DOMAIN, entry_id),
+                model="VMs",
+                via_device=(DOMAIN, f"{entry_id}_system"),
             )
 
+        if self._device_key == DEVICE_KEY_REPLICATION:
+            return DeviceInfo(
+                identifiers={(DOMAIN, f"{entry_id}_replication")},
+                name="Replication",
+                manufacturer="iXsystems",
+                model="Replication Tasks",
+                via_device=(DOMAIN, f"{entry_id}_system"),
+            )
+
+        if self._device_key == DEVICE_KEY_SNAPSHOTS:
+            return DeviceInfo(
+                identifiers={(DOMAIN, f"{entry_id}_snapshot_tasks")},
+                name="Snapshot Tasks",
+                manufacturer="iXsystems",
+                model="Periodic Snapshot Tasks",
+                via_device=(DOMAIN, f"{entry_id}_system"),
+            )
+
+        if self._device_key == DEVICE_KEY_CLOUDSYNC:
+            return DeviceInfo(
+                identifiers={(DOMAIN, f"{entry_id}_cloudsync")},
+                name="Cloud Sync",
+                manufacturer="iXsystems",
+                model="Cloud Sync Tasks",
+                via_device=(DOMAIN, f"{entry_id}_system"),
+            )
+
+        # Fallback to system device
         return DeviceInfo(
-            identifiers={(DOMAIN, entry_id)},
+            identifiers={(DOMAIN, f"{entry_id}_system")},
             name=hostname,
         )

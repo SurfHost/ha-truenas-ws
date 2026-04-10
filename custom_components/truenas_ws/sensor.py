@@ -25,7 +25,17 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
-from .entity import TrueNASEntity
+from .entity import (
+    DEVICE_KEY_APPS,
+    DEVICE_KEY_CLOUDSYNC,
+    DEVICE_KEY_DATASETS,
+    DEVICE_KEY_DISKS,
+    DEVICE_KEY_REPLICATION,
+    DEVICE_KEY_SNAPSHOTS,
+    DEVICE_KEY_SYSTEM,
+    DEVICE_KEY_VMS,
+    TrueNASEntity,
+)
 from .models import TrueNASData
 
 
@@ -196,7 +206,7 @@ async def async_setup_entry(
 
     # System sensors
     for desc in SYSTEM_SENSORS:
-        entities.append(TrueNASSensor(coordinator, desc, "system"))
+        entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_SYSTEM))
 
     # Pool sensors
     for pool in coordinator.data.pools:
@@ -206,43 +216,42 @@ async def async_setup_entry(
     # Disk sensors
     for disk in coordinator.data.disks:
         for desc in _disk_sensors(disk.name):
-            entities.append(TrueNASSensor(coordinator, desc, f"disk_{disk.name}"))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_DISKS))
 
     # Dataset sensors (only enable top-level datasets by default, depth <= 2)
     for dataset in coordinator.data.datasets:
-        pool_name = dataset.pool
         depth = dataset.id.count("/")
         enabled = depth <= 1  # e.g. "nvme" (0) and "nvme/Docker" (1)
         for desc in _dataset_sensors(dataset.id, enabled_default=enabled):
-            entities.append(TrueNASSensor(coordinator, desc, f"pool_{pool_name}"))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_DATASETS))
 
     # Network interface sensors
     for iface in coordinator.data.network_interfaces:
         for desc in _network_sensors(iface.name):
-            entities.append(TrueNASSensor(coordinator, desc, "system"))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_SYSTEM))
 
     # App sensors
     for app in coordinator.data.apps:
         for desc in _app_sensors(app.name):
-            entities.append(TrueNASSensor(coordinator, desc, f"app_{app.name}"))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_APPS))
 
     # VM sensors
     for vm in coordinator.data.vms:
         for desc in _vm_sensors(vm.name, vm.id):
-            entities.append(TrueNASSensor(coordinator, desc, f"vm_{vm.name}"))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_VMS))
 
     # Task sensors
     for task in coordinator.data.replication_tasks:
         for desc in _replication_sensors(task.id, task.name):
-            entities.append(TrueNASSensor(coordinator, desc, "system"))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_REPLICATION))
 
     for task in coordinator.data.snapshot_tasks:
         for desc in _snapshot_task_sensors(task.id, task.dataset):
-            entities.append(TrueNASSensor(coordinator, desc, "system"))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_SNAPSHOTS))
 
     for task in coordinator.data.cloud_sync_tasks:
         for desc in _cloudsync_sensors(task.id, task.description):
-            entities.append(TrueNASSensor(coordinator, desc, "system"))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_CLOUDSYNC))
 
     async_add_entities(entities)
 

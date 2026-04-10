@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
-from .entity import TrueNASEntity
+from .entity import DEVICE_KEY_DISKS, DEVICE_KEY_SYSTEM, TrueNASEntity
 from .models import TrueNASData
 
 
@@ -62,7 +62,7 @@ async def async_setup_entry(
 
     # System binary sensors
     for desc in SYSTEM_BINARY_SENSORS:
-        entities.append(TrueNASBinarySensor(coordinator, desc, "system"))
+        entities.append(TrueNASBinarySensor(coordinator, desc, DEVICE_KEY_SYSTEM))
 
     # Pool health
     for pool in coordinator.data.pools:
@@ -94,7 +94,7 @@ async def async_setup_entry(
             value_fn=lambda data, _name=disk.name: False,  # placeholder - SMART needs separate query
         )
         entities.append(
-            TrueNASBinarySensor(coordinator, desc, f"disk_{disk.name}")
+            TrueNASBinarySensor(coordinator, desc, DEVICE_KEY_DISKS)
         )
 
     async_add_entities(entities)

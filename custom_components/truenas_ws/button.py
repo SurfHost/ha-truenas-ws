@@ -12,7 +12,7 @@ from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
-from .entity import TrueNASEntity
+from .entity import DEVICE_KEY_DATASETS, DEVICE_KEY_SYSTEM, TrueNASEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ async def async_setup_entry(
     for dataset in coordinator.data.datasets:
         if dataset.type == "FILESYSTEM":
             entities.append(
-                TrueNASSnapshotButton(coordinator, dataset.id, dataset.pool)
+                TrueNASSnapshotButton(coordinator, dataset.id)
             )
 
     async_add_entities(entities)
@@ -53,7 +53,7 @@ class TrueNASRebootButton(TrueNASEntity, ButtonEntity):
             key="system_reboot",
             translation_key="system_reboot",
         )
-        super().__init__(coordinator, description, "system")
+        super().__init__(coordinator, description, DEVICE_KEY_SYSTEM)
 
     @property
     def name(self) -> str:
@@ -77,7 +77,7 @@ class TrueNASShutdownButton(TrueNASEntity, ButtonEntity):
             key="system_shutdown",
             translation_key="system_shutdown",
         )
-        super().__init__(coordinator, description, "system")
+        super().__init__(coordinator, description, DEVICE_KEY_SYSTEM)
 
     @property
     def name(self) -> str:
@@ -99,7 +99,6 @@ class TrueNASSnapshotButton(TrueNASEntity, ButtonEntity):
         self,
         coordinator: TrueNASDataUpdateCoordinator,
         dataset_id: str,
-        pool_name: str,
     ) -> None:
         """Initialize the button."""
         safe_id = dataset_id.replace("/", "_")
@@ -107,7 +106,7 @@ class TrueNASSnapshotButton(TrueNASEntity, ButtonEntity):
             key=f"snapshot_{safe_id}",
             translation_key="create_snapshot",
         )
-        super().__init__(coordinator, description, f"pool_{pool_name}")
+        super().__init__(coordinator, description, DEVICE_KEY_DATASETS)
         self._dataset_id = dataset_id
 
     @property

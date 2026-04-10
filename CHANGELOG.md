@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.2] - 2026-04-10
+
+### Changed
+
+- Device grouping: entities are now grouped by category (Apps, Disks, Datasets, Services, VMs, Replication, Snapshot Tasks, Cloud Sync) instead of individual devices per resource
+- Apps, VMs, disks, datasets, services, and tasks all appear under their respective group device
+- Pools still have their own individual device per pool
+- Much cleaner device list matching the old integration layout
+
 ## [0.1.1] - 2026-04-10
 
 ### Fixed
