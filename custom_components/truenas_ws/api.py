@@ -57,6 +57,8 @@ class TrueNASWebSocketClient:
         self._verify_ssl = verify_ssl
 
         self._ws: aiohttp.ClientWebSocketResponse | None = None
+        self._ws_url: str = ""
+        self._is_legacy: bool = False  # True if using /websocket (DDP)
         self._next_id = 0
         self._pending: dict[int, asyncio.Future[Any]] = {}
         self._listen_task: asyncio.Task[None] | None = None
@@ -70,11 +72,17 @@ class TrueNASWebSocketClient:
         """Return True if connected."""
         return self._connected
 
-    @property
-    def ws_url(self) -> str:
-        """Return the WebSocket URL."""
-        scheme = "wss" if self._verify_ssl else "ws"
-        return f"{scheme}://{self._host}/api/current"
+    def _build_urls(self) -> list[str]:
+        """Return WebSocket URLs to try, in order."""
+        urls: list[str] = []
+        # Always try wss:// first (TrueNAS uses HTTPS by default)
+        urls.append(f"wss://{self._host}/api/current")
+        urls.append(f"wss://{self._host}/websocket")
+        # Fallback to ws:// if SSL is not required
+        if not self._verify_ssl:
+            urls.append(f"ws://{self._host}/api/current")
+            urls.append(f"ws://{self._host}/websocket")
+        return urls
 
     async def connect(self) -> None:
         """Connect to TrueNAS WebSocket and authenticate."""
@@ -87,27 +95,41 @@ class TrueNASWebSocketClient:
         if not self._verify_ssl:
             ssl_context = False
 
-        try:
-            self._ws = await self._session.ws_connect(
-                self.ws_url,
-                ssl=ssl_context,
-                heartbeat=30,
-                timeout=aiohttp.ClientWSTimeout(ws_close=10),
-            )
-        except (
-            aiohttp.WSServerHandshakeError,
-            aiohttp.ClientError,
-            TimeoutError,
-            OSError,
-        ) as err:
-            raise TrueNASConnectionError(
-                f"Cannot connect to {self._host}: {err}"
-            ) from err
+        last_err: Exception | None = None
+        for url in self._build_urls():
+            try:
+                _LOGGER.debug("Trying WebSocket connection to %s", url)
+                self._ws = await self._session.ws_connect(
+                    url,
+                    ssl=ssl_context if url.startswith("wss") else None,
+                    heartbeat=30,
+                    timeout=aiohttp.ClientWSTimeout(ws_close=10),
+                )
+                self._connected = True
+                self._ws_url = url
+                self._listen_task = asyncio.create_task(self._listen())
+                _LOGGER.debug("Connected to %s", url)
 
-        self._connected = True
-        self._listen_task = asyncio.create_task(self._listen())
+                await self._authenticate()
+                return
+            except TrueNASAuthenticationError:
+                # Auth failed — don't try other URLs, the credentials are wrong
+                await self._close_ws()
+                raise
+            except (
+                aiohttp.WSServerHandshakeError,
+                aiohttp.ClientError,
+                TimeoutError,
+                OSError,
+            ) as err:
+                _LOGGER.debug("Failed to connect to %s: %s", url, err)
+                last_err = err
+                await self._close_ws()
+                continue
 
-        await self._authenticate()
+        raise TrueNASConnectionError(
+            f"Cannot connect to {self._host}: {last_err}"
+        )
 
     async def disconnect(self) -> None:
         """Disconnect from TrueNAS."""
@@ -135,55 +157,130 @@ class TrueNASWebSocketClient:
                     TrueNASConnectionError("WebSocket disconnected")
                 )
         self._pending.clear()
+        if hasattr(self, "_pending_str"):
+            self._pending_str.clear()
 
     async def _authenticate(self) -> None:
         """Authenticate with API key."""
+        self._is_legacy = "/websocket" in self._ws_url
+
+        if self._is_legacy:
+            await self._authenticate_legacy()
+        else:
+            await self._authenticate_jsonrpc()
+
+    async def _authenticate_jsonrpc(self) -> None:
+        """Authenticate using JSON-RPC 2.0 (TrueNAS 25.04+)."""
         try:
             result = await self._send_request(
                 "auth.login_with_api_key", [self._api_key]
             )
         except TrueNASAPIError as err:
-            await self._close_ws()
             raise TrueNASAuthenticationError(
                 f"Authentication failed: {err}"
             ) from err
 
         if result is not True:
-            await self._close_ws()
             raise TrueNASAuthenticationError("Authentication failed: invalid API key")
+
+    async def _authenticate_legacy(self) -> None:
+        """Authenticate using legacy DDP protocol (/websocket endpoint)."""
+        if self._ws is None or self._ws.closed:
+            raise TrueNASConnectionError("Not connected")
+
+        # DDP connect handshake
+        await self._ws.send_json({
+            "msg": "connect",
+            "version": "1",
+            "support": ["1"],
+        })
+
+        # Wait for "connected" response
+        try:
+            resp = await asyncio.wait_for(self._ws.receive_json(), timeout=10)
+        except TimeoutError as err:
+            raise TrueNASConnectionError("DDP handshake timeout") from err
+
+        if resp.get("msg") != "connected":
+            _LOGGER.debug("DDP handshake response: %s", resp)
+            raise TrueNASConnectionError(f"DDP handshake failed: {resp}")
+
+        # Auth with API key
+        auth_id = str(self._next_id)
+        self._next_id += 1
+        await self._ws.send_json({
+            "msg": "method",
+            "method": "auth.login_with_api_key",
+            "id": auth_id,
+            "params": [self._api_key],
+        })
+
+        try:
+            resp = await asyncio.wait_for(self._ws.receive_json(), timeout=10)
+        except TimeoutError as err:
+            raise TrueNASAuthenticationError("Auth response timeout") from err
+
+        if resp.get("msg") == "result" and resp.get("result") is True:
+            _LOGGER.debug("Legacy DDP authentication successful")
+            return
+
+        _LOGGER.debug("Legacy auth response: %s", resp)
+        raise TrueNASAuthenticationError(
+            f"Authentication failed: {resp.get('error', 'invalid API key')}"
+        )
 
     async def _send_request(
         self, method: str, params: list[Any] | None = None
     ) -> Any:
-        """Send a JSON-RPC 2.0 request and wait for response."""
+        """Send a request and wait for response (supports both JSON-RPC 2.0 and DDP)."""
         if not self._connected or self._ws is None or self._ws.closed:
             raise TrueNASConnectionError("Not connected")
 
         request_id = self._next_id
         self._next_id += 1
 
-        message: dict[str, Any] = {
-            "jsonrpc": "2.0",
-            "method": method,
-            "id": request_id,
-        }
-        if params is not None:
-            message["params"] = params
+        if self._is_legacy:
+            # DDP protocol
+            str_id = str(request_id)
+            message: dict[str, Any] = {
+                "msg": "method",
+                "method": method,
+                "id": str_id,
+            }
+            if params is not None:
+                message["params"] = params
+        else:
+            # JSON-RPC 2.0 protocol
+            str_id = str(request_id)
+            message = {
+                "jsonrpc": "2.0",
+                "method": method,
+                "id": request_id,
+            }
+            if params is not None:
+                message["params"] = params
 
         loop = asyncio.get_running_loop()
         future: asyncio.Future[Any] = loop.create_future()
+        # Store with both int and str key for matching
         self._pending[request_id] = future
+        self._pending_str: dict[str, asyncio.Future[Any]]
+        if not hasattr(self, "_pending_str"):
+            self._pending_str = {}
+        self._pending_str[str_id] = future
 
         try:
             await self._ws.send_json(message)
         except (ConnectionError, TypeError) as err:
             self._pending.pop(request_id, None)
+            self._pending_str.pop(str_id, None)
             raise TrueNASConnectionError(f"Failed to send request: {err}") from err
 
         try:
             return await asyncio.wait_for(future, timeout=REQUEST_TIMEOUT)
         except TimeoutError:
             self._pending.pop(request_id, None)
+            self._pending_str.pop(str_id, None)
             raise TrueNASTimeoutError(
                 f"Timeout waiting for response to {method}"
             ) from None
@@ -220,21 +317,45 @@ class TrueNASWebSocketClient:
             self._pending.clear()
 
     def _handle_message(self, data: dict[str, Any]) -> None:
-        """Handle an incoming JSON-RPC message."""
-        if "id" in data and data["id"] is not None:
+        """Handle an incoming message (JSON-RPC 2.0 or DDP)."""
+        msg_type = data.get("msg")
+
+        if msg_type == "result":
+            # DDP response
+            msg_id = data.get("id")
+            if msg_id is not None:
+                pending_str = getattr(self, "_pending_str", {})
+                future = pending_str.pop(str(msg_id), None)
+                # Also clean int pending
+                try:
+                    self._pending.pop(int(msg_id), None)
+                except (ValueError, TypeError):
+                    pass
+                if future is not None and not future.done():
+                    if "error" in data:
+                        error = data["error"]
+                        err_msg = error.get("message", str(error)) if isinstance(
+                            error, dict
+                        ) else str(error)
+                        future.set_exception(TrueNASAPIError(err_msg))
+                    else:
+                        future.set_result(data.get("result"))
+        elif "id" in data and data["id"] is not None:
+            # JSON-RPC 2.0 response
             future = self._pending.pop(data["id"], None)
             if future is not None and not future.done():
                 if "error" in data:
                     error = data["error"]
-                    msg = error.get("message", str(error)) if isinstance(
+                    err_msg = error.get("message", str(error)) if isinstance(
                         error, dict
                     ) else str(error)
-                    future.set_exception(TrueNASAPIError(msg))
+                    future.set_exception(TrueNASAPIError(err_msg))
                 else:
                     future.set_result(data.get("result"))
-        elif data.get("method") == "collection_update":
-            params = data.get("params", {})
-            collection = params.get("collection", "")
+        elif data.get("method") == "collection_update" or msg_type == "changed":
+            # Push notification (JSON-RPC or DDP)
+            params = data.get("params", data.get("fields", {}))
+            collection = data.get("collection", params.get("collection", ""))
             callbacks = self._collection_callbacks.get(collection, [])
             for callback in callbacks:
                 try:
@@ -243,6 +364,12 @@ class TrueNASWebSocketClient:
                     _LOGGER.exception(
                         "Error in collection_update callback for %s", collection
                     )
+        elif msg_type in ("connected", "ping", "pong", "ready", "nosub", "updated"):
+            # DDP control messages — ignore
+            if msg_type == "ping":
+                # Respond to DDP ping
+                if self._ws and not self._ws.closed:
+                    asyncio.create_task(self._ws.send_json({"msg": "pong"}))
 
     def register_callback(
         self,
