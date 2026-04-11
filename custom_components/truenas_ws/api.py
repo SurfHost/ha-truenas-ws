@@ -683,9 +683,23 @@ class TrueNASWebSocketClient:
         return {}
 
     async def get_pools(self) -> list[PoolInfo]:
-        """Get ZFS pool information."""
+        """Get ZFS pool information including boot pool."""
         result = await self._send_request("pool.query")
-        return [PoolInfo.from_api(p) for p in result]
+        pools = [PoolInfo.from_api(p) for p in result]
+
+        # Add boot pool — pool.query excludes it by default
+        try:
+            boot = await self._send_request("boot.get_state")
+            if isinstance(boot, dict) and boot.get("name"):
+                # boot.get_state returns a ZFS pool-like structure
+                boot_pool = PoolInfo.from_boot_api(boot)
+                # Only add if not already in the list
+                if not any(p.name == boot_pool.name for p in pools):
+                    pools.append(boot_pool)
+        except (TrueNASAPIError, TrueNASTimeoutError):
+            _LOGGER.debug("boot.get_state not available")
+
+        return pools
 
     async def get_datasets(self) -> list[DatasetInfo]:
         """Get dataset information."""

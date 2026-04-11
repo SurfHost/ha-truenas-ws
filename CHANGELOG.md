@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2] - 2026-04-11
+
+### Added
+
+- Boot pool monitoring via `boot.get_state` API (pool.query excludes the boot pool by default)
+- Boot pool shows status, used/free/total space, usage percentage, fragmentation under Storage device
+
 ## [0.2.1] - 2026-04-11
 
 ### Fixed

@@ -222,6 +222,53 @@ class PoolInfo:
             path=data.get("path", ""),
         )
 
+    @classmethod
+    def from_boot_api(cls, data: dict[str, Any]) -> Self:
+        """Create from boot.get_state response.
+
+        boot.get_state returns a raw ZFS pool structure with properties
+        nested under 'properties' and groups under 'groups'.
+        """
+        props = data.get("properties", {})
+        scan = data.get("scan")
+        scan_state: str | None = None
+        scan_pct: float | None = None
+        if scan:
+            scan_state = scan.get("state")
+            scan_pct = scan.get("percentage")
+
+        # Size/allocated/free from properties
+        size = int(props.get("size", {}).get("parsed", 0))
+        allocated = int(props.get("allocated", {}).get("parsed", 0))
+        free = int(props.get("free", {}).get("parsed", 0))
+        frag_raw = props.get("fragmentation", {})
+        frag = int(frag_raw.get("parsed", 0)) if isinstance(frag_raw, dict) else 0
+
+        # Status from properties or top-level
+        status = data.get("status", "UNKNOWN")
+        healthy = status == "ONLINE"
+
+        autotrim_raw = props.get("autotrim", {})
+        autotrim = autotrim_raw.get("parsed") == "on" if isinstance(autotrim_raw, dict) else False
+
+        return cls(
+            id=0,
+            name=data.get("name", "boot-pool"),
+            guid=data.get("guid", props.get("guid", {}).get("parsed", "")),
+            status=status,
+            healthy=healthy,
+            warning=not healthy,
+            size=size,
+            allocated=allocated,
+            free=free,
+            fragmentation=frag,
+            is_decrypted=True,
+            scan_state=scan_state,
+            scan_percentage=scan_pct,
+            autotrim=autotrim,
+            path=data.get("path", ""),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class DatasetInfo:
