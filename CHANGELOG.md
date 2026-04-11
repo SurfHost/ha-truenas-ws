@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.7] - 2026-04-12
+
+### Fixed
+
+- ARC hit ratio: only query actual hit percentage graphs (was matching arcsize which returned bytes as %)
+- ARC hit ratio: try `identifier: graph_name` format (matching the pattern from successful arcsize query)
+- Simplified ARC hit code — no more broad keyword matching or graph discovery overhead
+
 ## [0.2.6] - 2026-04-12
 
 ### Fixed

@@ -580,107 +580,56 @@ class TrueNASWebSocketClient:
                 except (TrueNASAPIError, TrueNASTimeoutError):
                     pass
 
-        # ARC hit ratio — discover available graphs and their identifiers
+        # ARC hit ratio — only query hit percentage graphs
         arc_hit_found = arc_hit > 0
         if not arc_hit_found:
             now = int(time_mod.time())
-
-            # First, discover what the ARC-related graphs actually need
-            arc_graphs: list[dict[str, Any]] = []
-            try:
-                all_graphs = await self._send_request("reporting.graphs")
-                if isinstance(all_graphs, list):
-                    arc_keywords = {"demand", "arc", "hit"}
-                    for g in all_graphs:
-                        if isinstance(g, dict):
-                            name = g.get("name", "").lower()
-                            if any(kw in name for kw in arc_keywords):
-                                arc_graphs.append(g)
-                    if not hasattr(self, "_arc_graphs_logged"):
-                        self._arc_graphs_logged = True
-                        _LOGGER.warning(
-                            "TrueNAS ARC-related graphs: %s",
-                            [
-                                {
-                                    "name": g.get("name"),
-                                    "title": g.get("title"),
-                                    "identifiers": g.get("identifiers"),
-                                }
-                                for g in arc_graphs
-                            ],
-                        )
-            except (TrueNASAPIError, TrueNASTimeoutError):
-                pass
-
-            # Try each ARC graph with proper identifiers
-            for graph in arc_graphs:
+            # Only graphs that return a percentage value (not bytes/rates)
+            hit_graphs = (
+                "demanddatahitpercentage",
+                "l2architpercentage",
+            )
+            for graph_name in hit_graphs:
                 if arc_hit_found:
                     break
-                graph_name = graph.get("name", "")
-                needs_id = graph.get("identifiers")  # e.g. None, [], or list of ids
-
-                # Build list of identifier values to try
-                id_values: list[str | None] = [None]
-                if needs_id:
-                    # The graph specifies what identifiers it needs
-                    if isinstance(needs_id, list) and needs_id:
-                        id_values = [str(v) for v in needs_id]
-                    else:
-                        # Try pool names as identifiers
-                        try:
-                            pools_raw = await self._send_request("pool.query")
-                            id_values = [
-                                p.get("name", "") for p in pools_raw
-                                if isinstance(p, dict) and p.get("name")
-                            ]
-                        except (TrueNASAPIError, TrueNASTimeoutError):
-                            pass
-
-                for id_val in id_values:
+                # Try multiple identifier formats:
+                # 1. identifier = graph name (matching arcsize response pattern)
+                # 2. no identifier
+                specs_to_try = [
+                    {"name": graph_name, "identifier": graph_name},
+                    {"name": graph_name},
+                ]
+                for graph_spec in specs_to_try:
                     if arc_hit_found:
                         break
-                    graph_spec: dict[str, Any] = {"name": graph_name}
-                    if id_val is not None:
-                        graph_spec["identifier"] = id_val
                     try:
                         hit_report = await self._send_request(
                             "reporting.get_data",
                             [[graph_spec], {"start": now - 300, "end": now}],
                         )
                     except (TrueNASAPIError, TrueNASTimeoutError) as err:
-                        if not hasattr(self, "_arc_hit_err_logged"):
-                            self._arc_hit_err_logged = True
-                            _LOGGER.warning(
-                                "TrueNAS ARC hit query failed: graph=%s, id=%s, err=%s",
-                                graph_name, id_val, err,
-                            )
+                        _LOGGER.debug(
+                            "ARC hit query failed: spec=%s, err=%s",
+                            graph_spec, err,
+                        )
                         continue
 
                     if not hasattr(self, "_arc_hit_logged"):
                         self._arc_hit_logged = True
                         _LOGGER.warning(
-                            "TrueNAS ARC hit report(%s, id=%s): %s",
-                            graph_name, id_val,
+                            "TrueNAS ARC hit report(%s): %s",
+                            graph_spec,
                             str(hit_report)[:600],
                         )
                     if isinstance(hit_report, list) and hit_report:
                         report = hit_report[0]
                         if isinstance(report, dict):
                             data_points = report.get("data", [])
-                            legend = report.get("legend", [])
                             if data_points:
                                 for row in reversed(data_points):
                                     if isinstance(row, list) and len(row) >= 2:
-                                        if any(v is not None for v in row[1:]):
-                                            if legend:
-                                                for i, col in enumerate(legend):
-                                                    cl = col.lower()
-                                                    if i < len(row) and row[i] is not None and cl != "time":
-                                                        if "hit" in cl or "percentage" in cl or len(legend) <= 2:
-                                                            arc_hit = float(row[i])
-                                                            break
-                                            else:
-                                                arc_hit = float(row[1])
+                                        if row[1] is not None:
+                                            arc_hit = float(row[1])
                                             arc_hit_found = True
                                             break
 
