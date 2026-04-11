@@ -677,6 +677,11 @@ class TrueNASWebSocketClient:
         try:
             result = await self._send_request("disk.temperatures", [])
             if isinstance(result, dict):
+                if not hasattr(self, "_disk_temps_logged"):
+                    self._disk_temps_logged = True
+                    _LOGGER.warning(
+                        "TrueNAS disk.temperatures result: %s", result,
+                    )
                 return {k: v for k, v in result.items()}
         except (TrueNASAPIError, TrueNASTimeoutError):
             _LOGGER.debug("Failed to get disk temperatures")
@@ -691,7 +696,22 @@ class TrueNASWebSocketClient:
         try:
             boot = await self._send_request("boot.get_state")
             if isinstance(boot, dict) and boot.get("name"):
-                # boot.get_state returns a ZFS pool-like structure
+                if not hasattr(self, "_boot_logged"):
+                    self._boot_logged = True
+                    # Log top-level keys and properties for debugging
+                    props = boot.get("properties", {})
+                    _LOGGER.warning(
+                        "TrueNAS boot.get_state: name=%s, status=%s, "
+                        "top_keys=%s, prop_keys=%s, "
+                        "size=%s, allocated=%s, free=%s",
+                        boot.get("name"),
+                        boot.get("status"),
+                        list(boot.keys()),
+                        list(props.keys()) if isinstance(props, dict) else props,
+                        props.get("size"),
+                        props.get("allocated"),
+                        props.get("free"),
+                    )
                 boot_pool = PoolInfo.from_boot_api(boot)
                 # Only add if not already in the list
                 if not any(p.name == boot_pool.name for p in pools):

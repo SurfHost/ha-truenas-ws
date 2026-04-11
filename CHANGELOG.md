@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.3] - 2026-04-11
+
+### Fixed
+
+- Auto-cleanup stale network entities (eno received/sent) that were removed in v0.2.0
+- Added diagnostic logging for boot.get_state response to debug boot-pool 0.00 GiB
+- Added diagnostic logging for disk.temperatures to debug missing disk temps
+
 ## [0.2.2] - 2026-04-11
 
 ### Added
