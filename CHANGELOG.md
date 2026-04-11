@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.4] - 2026-04-11
+
+### Fixed
+
+- Boot pool: read size/allocated/free from top-level keys (not under `properties` which is empty)
+- ARC hit ratio: log the actual error when graph query fails (was silently swallowed)
+- Removed diagnostic logs for boot pool and disk temperatures (debugging complete)
+
 ## [0.2.3] - 2026-04-11
 
 ### Fixed

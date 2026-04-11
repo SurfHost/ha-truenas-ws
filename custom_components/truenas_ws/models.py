@@ -226,10 +226,9 @@ class PoolInfo:
     def from_boot_api(cls, data: dict[str, Any]) -> Self:
         """Create from boot.get_state response.
 
-        boot.get_state returns a raw ZFS pool structure with properties
-        nested under 'properties' and groups under 'groups'.
+        boot.get_state returns size/allocated/free/fragmentation/autotrim
+        at the top level (not under 'properties').
         """
-        props = data.get("properties", {})
         scan = data.get("scan")
         scan_state: str | None = None
         scan_pct: float | None = None
@@ -237,27 +236,41 @@ class PoolInfo:
             scan_state = scan.get("state")
             scan_pct = scan.get("percentage")
 
-        # Size/allocated/free from properties
-        size = int(props.get("size", {}).get("parsed", 0))
-        allocated = int(props.get("allocated", {}).get("parsed", 0))
-        free = int(props.get("free", {}).get("parsed", 0))
-        frag_raw = props.get("fragmentation", {})
-        frag = int(frag_raw.get("parsed", 0)) if isinstance(frag_raw, dict) else 0
+        # Size/allocated/free are at top level
+        size = int(data.get("size") or 0)
+        allocated = int(data.get("allocated") or 0)
+        free = int(data.get("free") or 0)
 
-        # Status from properties or top-level
+        # Fragmentation can be int or dict
+        frag_raw = data.get("fragmentation", 0)
+        if isinstance(frag_raw, dict):
+            frag = int(frag_raw.get("value", 0))
+        elif frag_raw is not None:
+            # Could be a string like "5%" or an int
+            frag_str = str(frag_raw).rstrip("%")
+            try:
+                frag = int(frag_str)
+            except ValueError:
+                frag = 0
+        else:
+            frag = 0
+
         status = data.get("status", "UNKNOWN")
-        healthy = status == "ONLINE"
+        healthy = bool(data.get("healthy", status == "ONLINE"))
 
-        autotrim_raw = props.get("autotrim", {})
-        autotrim = autotrim_raw.get("parsed") == "on" if isinstance(autotrim_raw, dict) else False
+        autotrim_raw = data.get("autotrim", {})
+        if isinstance(autotrim_raw, dict):
+            autotrim = autotrim_raw.get("value") == "on"
+        else:
+            autotrim = bool(autotrim_raw)
 
         return cls(
             id=0,
             name=data.get("name", "boot-pool"),
-            guid=data.get("guid", props.get("guid", {}).get("parsed", "")),
+            guid=data.get("guid", ""),
             status=status,
             healthy=healthy,
-            warning=not healthy,
+            warning=bool(data.get("warning", not healthy)),
             size=size,
             allocated=allocated,
             free=free,
