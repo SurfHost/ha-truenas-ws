@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.8] - 2026-04-12
+
+### Fixed
+
+- ARC hit ratio: try 4 different API parameter formats to find what works for demanddatahitpercentage
+- ARC hit ratio: log all errors at WARNING level (were at DEBUG, invisible in default log)
+
 ## [0.2.7] - 2026-04-12
 
 ### Fixed

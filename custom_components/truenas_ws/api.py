@@ -580,58 +580,61 @@ class TrueNASWebSocketClient:
                 except (TrueNASAPIError, TrueNASTimeoutError):
                     pass
 
-        # ARC hit ratio — only query hit percentage graphs
+        # ARC hit ratio — try multiple API call formats
         arc_hit_found = arc_hit > 0
         if not arc_hit_found:
             now = int(time_mod.time())
-            # Only graphs that return a percentage value (not bytes/rates)
-            hit_graphs = (
-                "demanddatahitpercentage",
-                "l2architpercentage",
-            )
-            for graph_name in hit_graphs:
+            graph_name = "demanddatahitpercentage"
+
+            # Try different parameter formats for reporting.get_data
+            # Format A: [[{spec}], {query}] — works for arcsize/memory/cputemp
+            # Format B: [[{spec with identifier}], {query}]
+            # Format C: [{spec}, {query}] — no list wrapper around spec
+            attempts: list[tuple[str, list[Any]]] = [
+                ("A: list+spec", [[{"name": graph_name}], {"start": now - 300, "end": now}]),
+                ("B: list+spec+id", [[{"name": graph_name, "identifier": graph_name}], {"start": now - 300, "end": now}]),
+                ("C: spec only", [{"name": graph_name}, {"start": now - 300, "end": now}]),
+                ("D: graphs+query", [{"graphs": [{"name": graph_name}], "reporting_query": {"start": now - 300, "end": now}}]),
+            ]
+
+            errors: list[str] = []
+            for label, params in attempts:
                 if arc_hit_found:
                     break
-                # Try multiple identifier formats:
-                # 1. identifier = graph name (matching arcsize response pattern)
-                # 2. no identifier
-                specs_to_try = [
-                    {"name": graph_name, "identifier": graph_name},
-                    {"name": graph_name},
-                ]
-                for graph_spec in specs_to_try:
+                try:
+                    hit_report = await self._send_request(
+                        "reporting.get_data", params,
+                    )
+                except (TrueNASAPIError, TrueNASTimeoutError) as err:
+                    errors.append(f"{label}: {err}")
+                    continue
+
+                if not hasattr(self, "_arc_hit_logged"):
+                    self._arc_hit_logged = True
+                    _LOGGER.warning(
+                        "TrueNAS ARC hit SUCCESS with %s: %s",
+                        label,
+                        str(hit_report)[:600],
+                    )
+                result_list = hit_report if isinstance(hit_report, list) else [hit_report]
+                for report in result_list:
                     if arc_hit_found:
                         break
-                    try:
-                        hit_report = await self._send_request(
-                            "reporting.get_data",
-                            [[graph_spec], {"start": now - 300, "end": now}],
-                        )
-                    except (TrueNASAPIError, TrueNASTimeoutError) as err:
-                        _LOGGER.debug(
-                            "ARC hit query failed: spec=%s, err=%s",
-                            graph_spec, err,
-                        )
-                        continue
-
-                    if not hasattr(self, "_arc_hit_logged"):
-                        self._arc_hit_logged = True
-                        _LOGGER.warning(
-                            "TrueNAS ARC hit report(%s): %s",
-                            graph_spec,
-                            str(hit_report)[:600],
-                        )
-                    if isinstance(hit_report, list) and hit_report:
-                        report = hit_report[0]
-                        if isinstance(report, dict):
-                            data_points = report.get("data", [])
-                            if data_points:
-                                for row in reversed(data_points):
-                                    if isinstance(row, list) and len(row) >= 2:
-                                        if row[1] is not None:
-                                            arc_hit = float(row[1])
+                    if isinstance(report, dict):
+                        data_points = report.get("data", [])
+                        if data_points:
+                            for row in reversed(data_points):
+                                if isinstance(row, list) and len(row) >= 2:
+                                    if row[1] is not None:
+                                        arc_hit = float(row[1])
                                             arc_hit_found = True
                                             break
+
+            if not arc_hit_found and not hasattr(self, "_arc_hit_err_logged"):
+                self._arc_hit_err_logged = True
+                _LOGGER.warning(
+                    "TrueNAS ARC hit ratio: all attempts failed: %s", errors,
+                )
 
         # Try to get CPU temperature
         if cpu_temp is None:
