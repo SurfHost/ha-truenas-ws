@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1] - 2026-04-11
+
+### Fixed
+
+- ARC hit ratio: handle multi-column legend format (e.g. hits/misses columns), added `demanddatahitspersecond` to fallback list
+- ARC hit ratio: fix loop logic that prevented detection of valid 0% hit ratios
+- Added diagnostic log for ARC hit report response to debug remaining issue
+
 ## [0.2.0] - 2026-04-11
 
 ### Fixed

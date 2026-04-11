@@ -581,32 +581,53 @@ class TrueNASWebSocketClient:
                     pass
 
         # ARC hit ratio from reporting graphs
-        if arc_hit == 0.0:
+        arc_hit_found = arc_hit > 0
+        if not arc_hit_found:
             now = int(time_mod.time())
             # demanddatahitpercentage is the correct graph on TrueNAS SCALE
             for graph_name in (
                 "demanddatahitpercentage",
+                "demanddatahitspersecond",
                 "demandaccessespersecond",
                 "arcrate",
             ):
-                if arc_hit > 0:
+                if arc_hit_found:
                     break
                 try:
                     hit_report = await self._send_request(
                         "reporting.get_data",
                         [[{"name": graph_name}], {"start": now - 120, "end": now}],
                     )
+                    if not hasattr(self, "_arc_hit_logged"):
+                        self._arc_hit_logged = True
+                        _LOGGER.warning(
+                            "TrueNAS ARC hit report(%s): %s",
+                            graph_name,
+                            str(hit_report)[:600],
+                        )
                     if isinstance(hit_report, list) and hit_report:
                         report = hit_report[0]
                         if isinstance(report, dict):
                             data_points = report.get("data", [])
+                            legend = report.get("legend", [])
                             if data_points:
                                 for row in reversed(data_points):
                                     if isinstance(row, list) and len(row) >= 2:
-                                        if row[1] is not None:
-                                            arc_hit = float(row[1])
-                                            if arc_hit > 0:
-                                                break
+                                        if any(v is not None for v in row[1:]):
+                                            if legend:
+                                                # Look for hit/percentage column
+                                                for i, col in enumerate(legend):
+                                                    cl = col.lower()
+                                                    if i < len(row) and row[i] is not None and cl != "time":
+                                                        # For percentage graph, take first non-time value
+                                                        # For rate graph, prefer "hit" column
+                                                        if "hit" in cl or "percentage" in cl or len(legend) <= 2:
+                                                            arc_hit = float(row[i])
+                                                            break
+                                            else:
+                                                arc_hit = float(row[1])
+                                            arc_hit_found = True
+                                            break
                 except (TrueNASAPIError, TrueNASTimeoutError):
                     pass
 
