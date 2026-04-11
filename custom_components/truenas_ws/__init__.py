@@ -74,12 +74,16 @@ def _async_cleanup_stale_entities(
     ent_reg = er.async_get(hass)
     entries = er.async_entries_for_config_entry(ent_reg, entry.entry_id)
     for entity in entries:
+        uid = entity.unique_id or ""
+        eid = entity.entity_id or ""
         # Remove network per-interface sensors (removed in v0.2.0)
-        if entity.unique_id and (
-            "_net_" in entity.unique_id
-            and ("_received" in entity.unique_id or "_sent" in entity.unique_id)
-        ):
-            _LOGGER.info("Removing stale entity: %s", entity.entity_id)
+        is_net = (
+            ("_net_" in uid and ("_received" in uid or "_sent" in uid))
+            or ("_received" in eid and "eno" in eid)
+            or ("_sent" in eid and "eno" in eid)
+        )
+        if is_net:
+            _LOGGER.warning("Removing stale network entity: %s (uid=%s)", eid, uid)
             ent_reg.async_remove(entity.entity_id)
 
 

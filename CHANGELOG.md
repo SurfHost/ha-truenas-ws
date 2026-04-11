@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.5] - 2026-04-12
+
+### Fixed
+
+- ARC hit ratio: graph requires pool identifier — now fetches pool names and tries each as identifier
+- Boot pool: parser now reads size/allocated/free from top-level keys (confirmed fix from diagnostic)
+- Network entity cleanup: broadened matching to also match on entity_id pattern (eno + received/sent)
+- Removed stale diagnostic logs
+
 ## [0.2.4] - 2026-04-11
 
 ### Fixed

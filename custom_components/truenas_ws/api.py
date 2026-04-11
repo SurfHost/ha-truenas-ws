@@ -584,56 +584,71 @@ class TrueNASWebSocketClient:
         arc_hit_found = arc_hit > 0
         if not arc_hit_found:
             now = int(time_mod.time())
-            # demanddatahitpercentage is the correct graph on TrueNAS SCALE
-            for graph_name in (
+
+            # Get pool names — some ZFS graphs need a pool identifier
+            pool_names: list[str] = []
+            try:
+                pools_raw = await self._send_request("pool.query")
+                pool_names = [
+                    p.get("name", "") for p in pools_raw
+                    if isinstance(p, dict) and p.get("name")
+                ]
+            except (TrueNASAPIError, TrueNASTimeoutError):
+                pass
+
+            # Graphs to try, with and without pool identifiers
+            graph_names = (
                 "demanddatahitpercentage",
                 "demanddatahitspersecond",
                 "demandaccessespersecond",
                 "arcrate",
-            ):
+            )
+            for graph_name in graph_names:
                 if arc_hit_found:
                     break
-                try:
-                    hit_report = await self._send_request(
-                        "reporting.get_data",
-                        [[{"name": graph_name}], {"start": now - 120, "end": now}],
-                    )
-                except (TrueNASAPIError, TrueNASTimeoutError) as err:
+                # Try without identifier first, then with each pool name
+                identifiers: list[str | None] = [None, *pool_names]
+                for identifier in identifiers:
+                    if arc_hit_found:
+                        break
+                    graph_spec: dict[str, Any] = {"name": graph_name}
+                    if identifier is not None:
+                        graph_spec["identifier"] = identifier
+                    try:
+                        hit_report = await self._send_request(
+                            "reporting.get_data",
+                            [[graph_spec], {"start": now - 120, "end": now}],
+                        )
+                    except (TrueNASAPIError, TrueNASTimeoutError):
+                        continue
+
                     if not hasattr(self, "_arc_hit_logged"):
                         self._arc_hit_logged = True
                         _LOGGER.warning(
-                            "TrueNAS ARC hit graph '%s' failed: %s",
-                            graph_name, err,
+                            "TrueNAS ARC hit report(%s, id=%s): %s",
+                            graph_name, identifier,
+                            str(hit_report)[:600],
                         )
-                    continue
-
-                if not hasattr(self, "_arc_hit_logged"):
-                    self._arc_hit_logged = True
-                    _LOGGER.warning(
-                        "TrueNAS ARC hit report(%s): %s",
-                        graph_name,
-                        str(hit_report)[:600],
-                    )
-                if isinstance(hit_report, list) and hit_report:
-                    report = hit_report[0]
-                    if isinstance(report, dict):
-                        data_points = report.get("data", [])
-                        legend = report.get("legend", [])
-                        if data_points:
-                            for row in reversed(data_points):
-                                if isinstance(row, list) and len(row) >= 2:
-                                    if any(v is not None for v in row[1:]):
-                                        if legend:
-                                            for i, col in enumerate(legend):
-                                                cl = col.lower()
-                                                if i < len(row) and row[i] is not None and cl != "time":
-                                                    if "hit" in cl or "percentage" in cl or len(legend) <= 2:
-                                                        arc_hit = float(row[i])
-                                                        break
-                                        else:
-                                            arc_hit = float(row[1])
-                                        arc_hit_found = True
-                                        break
+                    if isinstance(hit_report, list) and hit_report:
+                        report = hit_report[0]
+                        if isinstance(report, dict):
+                            data_points = report.get("data", [])
+                            legend = report.get("legend", [])
+                            if data_points:
+                                for row in reversed(data_points):
+                                    if isinstance(row, list) and len(row) >= 2:
+                                        if any(v is not None for v in row[1:]):
+                                            if legend:
+                                                for i, col in enumerate(legend):
+                                                    cl = col.lower()
+                                                    if i < len(row) and row[i] is not None and cl != "time":
+                                                        if "hit" in cl or "percentage" in cl or len(legend) <= 2:
+                                                            arc_hit = float(row[i])
+                                                            break
+                                            else:
+                                                arc_hit = float(row[1])
+                                            arc_hit_found = True
+                                            break
 
         # Try to get CPU temperature
         if cpu_temp is None:
