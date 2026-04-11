@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0] - 2026-04-11
+
+### Fixed
+
+- ARC hit ratio: use correct graph name `demanddatahitpercentage` (discovered from `reporting.graphs`)
+- Memory free now calculated from total - used when not provided by API
+
+### Changed
+
+- Removed network per-interface traffic sensors (TrueNAS API returns empty data for interface reporting)
+- Removed all one-time diagnostic WARNING logs (debugging complete)
+
 ## [0.1.9] - 2026-04-11
 
 ### Fixed

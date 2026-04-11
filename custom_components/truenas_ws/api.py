@@ -421,13 +421,6 @@ class TrueNASWebSocketClient:
             if isinstance(result, dict):
                 realtime_worked = True
                 # Log once at warning level for debugging
-                if not hasattr(self, "_realtime_logged"):
-                    self._realtime_logged = True
-                    _LOGGER.warning(
-                        "TrueNAS reporting.realtime response keys: %s",
-                        list(result.keys()),
-                    )
-
                 # CPU usage
                 cpu_raw = result.get("cpu", {})
                 if isinstance(cpu_raw, dict):
@@ -447,11 +440,6 @@ class TrueNASWebSocketClient:
                 # Memory from realtime
                 mem_raw = result.get("memory", {})
                 if isinstance(mem_raw, dict):
-                    if not hasattr(self, "_mem_logged"):
-                        self._mem_logged = True
-                        _LOGGER.warning(
-                            "TrueNAS realtime memory data: %s", mem_raw,
-                        )
                     mem_total = int(mem_raw.get("physmem", mem_raw.get("total", 0)))
                     mem_used = int(mem_raw.get("used", 0))
                     mem_free = int(mem_raw.get("free", 0))
@@ -475,10 +463,8 @@ class TrueNASWebSocketClient:
                 if isinstance(cpu_temp_raw, (int, float)):
                     cpu_temp = float(cpu_temp_raw)
 
-        except (TrueNASAPIError, TrueNASTimeoutError) as err:
-            if not hasattr(self, "_realtime_logged"):
-                self._realtime_logged = True
-                _LOGGER.warning("reporting.realtime not available: %s", err)
+        except (TrueNASAPIError, TrueNASTimeoutError):
+            _LOGGER.debug("reporting.realtime not available")
 
         # Fallback: get system info for total memory and CPU
         if not realtime_worked or mem_total == 0:
@@ -505,12 +491,6 @@ class TrueNASWebSocketClient:
                     "reporting.get_data",
                     [[{"name": "memory"}], {"start": now - 120, "end": now}],
                 )
-                if not hasattr(self, "_mem_report_logged"):
-                    self._mem_report_logged = True
-                    _LOGGER.warning(
-                        "TrueNAS reporting.get_data(memory) response: %s",
-                        str(mem_report)[:800],
-                    )
                 if isinstance(mem_report, list) and mem_report:
                     report = mem_report[0]
                     if isinstance(report, dict):
@@ -567,9 +547,11 @@ class TrueNASWebSocketClient:
             except (TrueNASAPIError, TrueNASTimeoutError):
                 _LOGGER.debug("reporting.get_data(memory) not available")
 
-        # Calculate memory percentage
+        # Calculate memory percentage and fill in missing values
         if mem_total > 0 and mem_used > 0:
             mem_pct = round(mem_used / mem_total * 100, 1)
+            if mem_free == 0:
+                mem_free = mem_total - mem_used
         elif mem_total > 0 and mem_free > 0:
             mem_used = mem_total - mem_free
             mem_pct = round(mem_used / mem_total * 100, 1)
@@ -598,26 +580,15 @@ class TrueNASWebSocketClient:
                 except (TrueNASAPIError, TrueNASTimeoutError):
                     pass
 
-        # One-time: discover available reporting graphs
-        if not hasattr(self, "_graphs_logged"):
-            self._graphs_logged = True
-            try:
-                graphs = await self._send_request("reporting.graphs")
-                if isinstance(graphs, list):
-                    graph_names = [
-                        g.get("name", "?") for g in graphs if isinstance(g, dict)
-                    ]
-                    _LOGGER.warning(
-                        "TrueNAS available reporting graphs: %s", graph_names,
-                    )
-            except (TrueNASAPIError, TrueNASTimeoutError):
-                _LOGGER.debug("reporting.graphs not available")
-
-        # ARC hit ratio — try to get from reporting graphs
+        # ARC hit ratio from reporting graphs
         if arc_hit == 0.0:
             now = int(time_mod.time())
-            # Try known graph names for ARC hit ratio
-            for graph_name in ("arcrate", "zfs_arc_rate", "architratio", "arc"):
+            # demanddatahitpercentage is the correct graph on TrueNAS SCALE
+            for graph_name in (
+                "demanddatahitpercentage",
+                "demandaccessespersecond",
+                "arcrate",
+            ):
                 if arc_hit > 0:
                     break
                 try:
@@ -625,30 +596,15 @@ class TrueNASWebSocketClient:
                         "reporting.get_data",
                         [[{"name": graph_name}], {"start": now - 120, "end": now}],
                     )
-                    if not hasattr(self, "_arc_hit_logged"):
-                        self._arc_hit_logged = True
-                        _LOGGER.warning(
-                            "TrueNAS reporting.get_data(%s) for ARC hit: %s",
-                            graph_name,
-                            str(hit_report)[:500],
-                        )
                     if isinstance(hit_report, list) and hit_report:
                         report = hit_report[0]
                         if isinstance(report, dict):
                             data_points = report.get("data", [])
-                            legend = report.get("legend", [])
                             if data_points:
                                 for row in reversed(data_points):
                                     if isinstance(row, list) and len(row) >= 2:
                                         if row[1] is not None:
-                                            if legend:
-                                                # Find hit column
-                                                for i, col in enumerate(legend):
-                                                    if "hit" in col.lower() and i < len(row) and row[i] is not None:
-                                                        arc_hit = float(row[i])
-                                                        break
-                                            else:
-                                                arc_hit = float(row[1])
+                                            arc_hit = float(row[1])
                                             if arc_hit > 0:
                                                 break
                 except (TrueNASAPIError, TrueNASTimeoutError):
@@ -675,15 +631,6 @@ class TrueNASWebSocketClient:
                                         break
             except (TrueNASAPIError, TrueNASTimeoutError):
                 _LOGGER.debug("CPU temperature not available")
-
-        if not hasattr(self, "_stats_logged"):
-            self._stats_logged = True
-            _LOGGER.warning(
-                "TrueNAS stats result: cpu=%.1f%%, mem_used=%d, mem_free=%d, "
-                "mem_total=%d (%.1f%%), arc=%d, arc_hit=%.1f, temp=%s",
-                cpu_usage, mem_used, mem_free, mem_total, mem_pct,
-                arc_size, arc_hit, cpu_temp,
-            )
 
         return SystemStats(
             cpu_usage=cpu_usage,
@@ -752,94 +699,7 @@ class TrueNASWebSocketClient:
         except TrueNASAPIError:
             result = await self._send_request("network.interface.query")
 
-        if not hasattr(self, "_iface_logged") and result:
-            self._iface_logged = True
-            # Log first interface state for debugging
-            first = result[0] if result else {}
-            state = first.get("state", {})
-            _LOGGER.warning(
-                "TrueNAS interface.query first result state keys: %s",
-                list(state.keys()) if isinstance(state, dict) else state,
-            )
-
-        interfaces = [NetworkInterface.from_api(n) for n in result]
-
-        # If byte counters are 0, try to get them from reporting
-        needs_stats = any(
-            n.received_bytes == 0 and n.sent_bytes == 0 for n in interfaces
-        )
-        if needs_stats and interfaces:
-            import time as time_mod
-
-            now = int(time_mod.time())
-            first_logged = False
-            for iface in interfaces:
-                try:
-                    report = await self._send_request(
-                        "reporting.get_data",
-                        [
-                            [{"name": "interface", "identifier": iface.name}],
-                            {"start": now - 120, "end": now},
-                        ],
-                    )
-                    if not first_logged:
-                        first_logged = True
-                        _LOGGER.warning(
-                            "TrueNAS network reporting(%s): %s",
-                            iface.name,
-                            str(report)[:500],
-                        )
-                    if isinstance(report, list) and report:
-                        rep = report[0]
-                        if isinstance(rep, dict):
-                            data_points = rep.get("data", [])
-                            legend = rep.get("legend", [])
-                            if data_points:
-                                if legend:
-                                    # Multi-column with legend
-                                    for row in reversed(data_points):
-                                        if isinstance(row, list) and len(row) > 1:
-                                            if any(v is not None for v in row[1:]):
-                                                rx = 0
-                                                tx = 0
-                                                for i, col in enumerate(legend):
-                                                    if i >= len(row) or row[i] is None:
-                                                        continue
-                                                    val = abs(float(row[i]))
-                                                    if "received" in col or col == "in":
-                                                        rx = int(val)
-                                                    elif "sent" in col or col == "out":
-                                                        tx = int(val)
-                                                if rx > 0 or tx > 0:
-                                                    from dataclasses import replace
-
-                                                    idx = interfaces.index(iface)
-                                                    interfaces[idx] = replace(
-                                                        iface,
-                                                        received_bytes=rx,
-                                                        sent_bytes=tx,
-                                                    )
-                                                break
-                                else:
-                                    # Simple format: [[timestamp, value], ...]
-                                    # Sum up rate values for total bytes
-                                    for row in reversed(data_points):
-                                        if isinstance(row, list) and len(row) >= 2:
-                                            if row[1] is not None:
-                                                from dataclasses import replace
-
-                                                idx = interfaces.index(iface)
-                                                interfaces[idx] = replace(
-                                                    iface,
-                                                    received_bytes=int(abs(row[1])),
-                                                )
-                                                break
-                except (TrueNASAPIError, TrueNASTimeoutError):
-                    _LOGGER.debug(
-                        "Network reporting for %s not available", iface.name
-                    )
-
-        return interfaces
+        return [NetworkInterface.from_api(n) for n in result]
 
     async def get_services(self) -> list[ServiceInfo]:
         """Get service information."""

@@ -235,11 +235,6 @@ async def async_setup_entry(
         for desc in _dataset_sensors(dataset.id, enabled_default=enabled):
             entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_STORAGE))
 
-    # Network interface sensors
-    for iface in coordinator.data.network_interfaces:
-        for desc in _network_sensors(iface.name):
-            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_SYSTEM))
-
     # App sensors
     for app in coordinator.data.apps:
         for desc in _app_sensors(app.name):
@@ -464,50 +459,6 @@ def _dataset_sensors(
             )
             if (ds := _find_dataset(data))
             and (ds.used_bytes + ds.available_bytes) > 0
-            else None,
-        ),
-    )
-
-
-def _network_sensors(
-    iface_name: str,
-) -> tuple[TrueNASSensorEntityDescription, ...]:
-    """Create sensor descriptions for a network interface."""
-
-    def _find_iface(data: TrueNASData) -> Any:
-        return next(
-            (n for n in data.network_interfaces if n.name == iface_name), None
-        )
-
-    return (
-        TrueNASSensorEntityDescription(
-            key=f"net_{iface_name}_received",
-            name=f"{iface_name} received",
-            native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
-            device_class=SensorDeviceClass.DATA_SIZE,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            suggested_display_precision=2,
-            icon="mdi:download-network",
-            entity_category=EntityCategory.DIAGNOSTIC,
-            value_fn=lambda data, _n=iface_name: round(
-                n.received_bytes / (1024**3), 2
-            )
-            if (n := _find_iface(data))
-            else None,
-        ),
-        TrueNASSensorEntityDescription(
-            key=f"net_{iface_name}_sent",
-            name=f"{iface_name} sent",
-            native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
-            device_class=SensorDeviceClass.DATA_SIZE,
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            suggested_display_precision=2,
-            icon="mdi:upload-network",
-            entity_category=EntityCategory.DIAGNOSTIC,
-            value_fn=lambda data, _n=iface_name: round(
-                n.sent_bytes / (1024**3), 2
-            )
-            if (n := _find_iface(data))
             else None,
         ),
     )
