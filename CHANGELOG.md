@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.0] - 2026-04-12
+
+### Added
+
+- Rsync task monitoring via `rsynctask.query` API
+- All tasks (Snapshot, Cloud Sync, Replication, Rsync) now grouped under a single **Tasks** device
+
+### Fixed
+
+- Reboot and Shutdown buttons now work — catch expected connection loss after sending command
+- Old per-type task devices (Replication, Snapshot Tasks, Cloud Sync) auto-cleaned on startup
+
+### Removed
+
+- ARC hit ratio sensor (TrueNAS API does not support this graph via WebSocket)
+
 ## [0.2.9] - 2026-04-12
 
 ### Removed

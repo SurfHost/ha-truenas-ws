@@ -574,6 +574,43 @@ class CloudSyncTask:
 
 
 @dataclass(frozen=True, slots=True)
+class RsyncTask:
+    """Rsync task information."""
+
+    id: int
+    path: str
+    remote_host: str
+    remote_path: str
+    state: str
+    last_run: str | None
+    enabled: bool
+    direction: str
+    description: str
+
+    @classmethod
+    def from_api(cls, data: dict[str, Any]) -> Self:
+        """Create from API response."""
+        job = data.get("job")
+        state = "UNKNOWN"
+        last_run: str | None = None
+        if isinstance(job, dict):
+            state = job.get("state", "UNKNOWN")
+            last_run = job.get("time_finished") or job.get("time_started")
+
+        return cls(
+            id=int(data.get("id", 0)),
+            path=data.get("path", ""),
+            remote_host=data.get("remotehost", ""),
+            remote_path=data.get("remotepath", ""),
+            state=state,
+            last_run=last_run,
+            enabled=bool(data.get("enabled", True)),
+            direction=data.get("direction", "PUSH"),
+            description=data.get("desc", data.get("description", "")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class Alert:
     """System alert."""
 
@@ -641,5 +678,6 @@ class TrueNASData:
     replication_tasks: list[ReplicationTask] = field(default_factory=list)
     snapshot_tasks: list[SnapshotTask] = field(default_factory=list)
     cloud_sync_tasks: list[CloudSyncTask] = field(default_factory=list)
+    rsync_tasks: list[RsyncTask] = field(default_factory=list)
     alerts: list[Alert] = field(default_factory=list)
     update_info: UpdateInfo | None = None

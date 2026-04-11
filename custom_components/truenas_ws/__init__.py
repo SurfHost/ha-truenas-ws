@@ -76,7 +76,7 @@ def _async_cleanup_stale_entities(
     for entity in entries:
         uid = entity.unique_id or ""
         eid = entity.entity_id or ""
-        # Remove stale entities from removed features
+        # Remove stale entities from removed/reorganized features
         is_stale = (
             # Network per-interface sensors (removed in v0.2.0)
             ("_net_" in uid and ("_received" in uid or "_sent" in uid))
@@ -85,6 +85,10 @@ def _async_cleanup_stale_entities(
             # ARC hit ratio sensor (removed in v0.2.9)
             or "arc_hit_ratio" in uid
             or "arc_hit_ratio" in eid
+            # Old per-type task devices (merged into Tasks in v0.2.9)
+            or "_replication_" in uid
+            or "_snapshot_tasks_" in uid
+            or "_cloudsync_" in uid
         )
         if is_stale:
             _LOGGER.info("Removing stale entity: %s", eid)

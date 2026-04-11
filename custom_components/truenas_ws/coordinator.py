@@ -139,6 +139,9 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
                 data.cloud_sync_tasks = await self._safe_fetch(
                     self.client.get_cloud_sync_tasks, data.cloud_sync_tasks
                 )
+                data.rsync_tasks = await self._safe_fetch(
+                    self.client.get_rsync_tasks, data.rsync_tasks
+                )
                 self._last_tasks = now
 
             # System info + update check every 12 hours

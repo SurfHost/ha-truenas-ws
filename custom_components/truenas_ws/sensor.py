@@ -26,11 +26,9 @@ from homeassistant.helpers.typing import StateType
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
 from .entity import (
     DEVICE_KEY_APPS,
-    DEVICE_KEY_CLOUDSYNC,
-    DEVICE_KEY_REPLICATION,
-    DEVICE_KEY_SNAPSHOTS,
     DEVICE_KEY_STORAGE,
     DEVICE_KEY_SYSTEM,
+    DEVICE_KEY_TASKS,
     DEVICE_KEY_VMS,
     TrueNASEntity,
 )
@@ -232,18 +230,22 @@ async def async_setup_entry(
         for desc in _vm_sensors(vm.name, vm.id):
             entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_VMS))
 
-    # Task sensors
+    # Task sensors — all grouped under Tasks device
     for task in coordinator.data.replication_tasks:
         for desc in _replication_sensors(task.id, task.name):
-            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_REPLICATION))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_TASKS))
 
     for task in coordinator.data.snapshot_tasks:
         for desc in _snapshot_task_sensors(task.id, task.dataset):
-            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_SNAPSHOTS))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_TASKS))
 
     for task in coordinator.data.cloud_sync_tasks:
         for desc in _cloudsync_sensors(task.id, task.description):
-            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_CLOUDSYNC))
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_TASKS))
+
+    for task in coordinator.data.rsync_tasks:
+        for desc in _rsync_sensors(task.id, task.path):
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_TASKS))
 
     async_add_entities(entities)
 
@@ -586,6 +588,41 @@ def _cloudsync_sensors(
                 "last_run": t.last_run,
                 "enabled": t.enabled,
                 "path": t.path,
+            }
+            if (t := _find_task(data))
+            else {},
+        ),
+    )
+
+
+def _rsync_sensors(
+    task_id: int, path: str
+) -> tuple[TrueNASSensorEntityDescription, ...]:
+    """Create sensor descriptions for a rsync task."""
+
+    def _find_task(data: TrueNASData) -> Any:
+        return next(
+            (t for t in data.rsync_tasks if t.id == task_id), None
+        )
+
+    short_path = path.rsplit("/", 1)[-1] if "/" in path else path
+
+    return (
+        TrueNASSensorEntityDescription(
+            key=f"rsync_{task_id}_status",
+            name=f"{short_path or f'Rsync {task_id}'}",
+            icon="mdi:sync",
+            value_fn=lambda data, _id=task_id: t.state
+            if (t := _find_task(data))
+            else None,
+            extra_attrs_fn=lambda data, _id=task_id: {
+                "path": t.path,
+                "remote_host": t.remote_host,
+                "remote_path": t.remote_path,
+                "direction": t.direction,
+                "last_run": t.last_run,
+                "enabled": t.enabled,
+                "description": t.description,
             }
             if (t := _find_task(data))
             else {},

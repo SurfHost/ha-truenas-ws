@@ -15,9 +15,7 @@ DEVICE_KEY_STORAGE = "storage"
 DEVICE_KEY_APPS = "apps"
 DEVICE_KEY_SERVICES = "services"
 DEVICE_KEY_VMS = "vms"
-DEVICE_KEY_REPLICATION = "replication"
-DEVICE_KEY_SNAPSHOTS = "snapshot_tasks"
-DEVICE_KEY_CLOUDSYNC = "cloudsync"
+DEVICE_KEY_TASKS = "tasks"
 
 
 class TrueNASEntity(CoordinatorEntity[TrueNASDataUpdateCoordinator]):
@@ -91,30 +89,12 @@ class TrueNASEntity(CoordinatorEntity[TrueNASDataUpdateCoordinator]):
                 via_device=(DOMAIN, f"{entry_id}_system"),
             )
 
-        if self._device_key == DEVICE_KEY_REPLICATION:
+        if self._device_key == DEVICE_KEY_TASKS:
             return DeviceInfo(
-                identifiers={(DOMAIN, f"{entry_id}_replication")},
-                name="Replication",
+                identifiers={(DOMAIN, f"{entry_id}_tasks")},
+                name="Tasks",
                 manufacturer="iXsystems",
-                model="Replication Tasks",
-                via_device=(DOMAIN, f"{entry_id}_system"),
-            )
-
-        if self._device_key == DEVICE_KEY_SNAPSHOTS:
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{entry_id}_snapshot_tasks")},
-                name="Snapshot Tasks",
-                manufacturer="iXsystems",
-                model="Periodic Snapshot Tasks",
-                via_device=(DOMAIN, f"{entry_id}_system"),
-            )
-
-        if self._device_key == DEVICE_KEY_CLOUDSYNC:
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{entry_id}_cloudsync")},
-                name="Cloud Sync",
-                manufacturer="iXsystems",
-                model="Cloud Sync Tasks",
+                model="Scheduled Tasks",
                 via_device=(DOMAIN, f"{entry_id}_system"),
             )
 

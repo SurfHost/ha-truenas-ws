@@ -24,6 +24,7 @@ from .models import (
     NetworkInterface,
     PoolInfo,
     ReplicationTask,
+    RsyncTask,
     ServiceInfo,
     SnapshotTask,
     SystemInfo,
@@ -719,6 +720,15 @@ class TrueNASWebSocketClient:
         result = await self._send_request("cloudsync.query")
         return [CloudSyncTask.from_api(c) for c in result]
 
+    async def get_rsync_tasks(self) -> list[RsyncTask]:
+        """Get rsync task information."""
+        try:
+            result = await self._send_request("rsynctask.query")
+            return [RsyncTask.from_api(r) for r in result]
+        except TrueNASAPIError:
+            _LOGGER.debug("Rsync tasks API not available")
+            return []
+
     async def get_alerts(self) -> list[Alert]:
         """Get system alerts."""
         result = await self._send_request("alert.list")
@@ -769,11 +779,19 @@ class TrueNASWebSocketClient:
 
     async def reboot(self) -> None:
         """Reboot the system."""
-        await self._send_request("system.reboot")
+        try:
+            await self._send_request("system.reboot")
+        except (TrueNASConnectionError, TrueNASTimeoutError):
+            # Expected: system disconnects before responding
+            pass
 
     async def shutdown(self) -> None:
         """Shutdown the system."""
-        await self._send_request("system.shutdown")
+        try:
+            await self._send_request("system.shutdown")
+        except (TrueNASConnectionError, TrueNASTimeoutError):
+            # Expected: system disconnects before responding
+            pass
 
     async def create_snapshot(self, dataset: str, name: str) -> None:
         """Create a ZFS snapshot."""
