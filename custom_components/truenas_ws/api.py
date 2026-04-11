@@ -580,53 +580,87 @@ class TrueNASWebSocketClient:
                 except (TrueNASAPIError, TrueNASTimeoutError):
                     pass
 
-        # ARC hit ratio from reporting graphs
+        # ARC hit ratio — discover available graphs and their identifiers
         arc_hit_found = arc_hit > 0
         if not arc_hit_found:
             now = int(time_mod.time())
 
-            # Get pool names — some ZFS graphs need a pool identifier
-            pool_names: list[str] = []
+            # First, discover what the ARC-related graphs actually need
+            arc_graphs: list[dict[str, Any]] = []
             try:
-                pools_raw = await self._send_request("pool.query")
-                pool_names = [
-                    p.get("name", "") for p in pools_raw
-                    if isinstance(p, dict) and p.get("name")
-                ]
+                all_graphs = await self._send_request("reporting.graphs")
+                if isinstance(all_graphs, list):
+                    arc_keywords = {"demand", "arc", "hit"}
+                    for g in all_graphs:
+                        if isinstance(g, dict):
+                            name = g.get("name", "").lower()
+                            if any(kw in name for kw in arc_keywords):
+                                arc_graphs.append(g)
+                    if not hasattr(self, "_arc_graphs_logged"):
+                        self._arc_graphs_logged = True
+                        _LOGGER.warning(
+                            "TrueNAS ARC-related graphs: %s",
+                            [
+                                {
+                                    "name": g.get("name"),
+                                    "title": g.get("title"),
+                                    "identifiers": g.get("identifiers"),
+                                }
+                                for g in arc_graphs
+                            ],
+                        )
             except (TrueNASAPIError, TrueNASTimeoutError):
                 pass
 
-            # Graphs to try, with and without pool identifiers
-            graph_names = (
-                "demanddatahitpercentage",
-                "demanddatahitspersecond",
-                "demandaccessespersecond",
-                "arcrate",
-            )
-            for graph_name in graph_names:
+            # Try each ARC graph with proper identifiers
+            for graph in arc_graphs:
                 if arc_hit_found:
                     break
-                # Try without identifier first, then with each pool name
-                identifiers: list[str | None] = [None, *pool_names]
-                for identifier in identifiers:
+                graph_name = graph.get("name", "")
+                needs_id = graph.get("identifiers")  # e.g. None, [], or list of ids
+
+                # Build list of identifier values to try
+                id_values: list[str | None] = [None]
+                if needs_id:
+                    # The graph specifies what identifiers it needs
+                    if isinstance(needs_id, list) and needs_id:
+                        id_values = [str(v) for v in needs_id]
+                    else:
+                        # Try pool names as identifiers
+                        try:
+                            pools_raw = await self._send_request("pool.query")
+                            id_values = [
+                                p.get("name", "") for p in pools_raw
+                                if isinstance(p, dict) and p.get("name")
+                            ]
+                        except (TrueNASAPIError, TrueNASTimeoutError):
+                            pass
+
+                for id_val in id_values:
                     if arc_hit_found:
                         break
                     graph_spec: dict[str, Any] = {"name": graph_name}
-                    if identifier is not None:
-                        graph_spec["identifier"] = identifier
+                    if id_val is not None:
+                        graph_spec["identifier"] = id_val
                     try:
                         hit_report = await self._send_request(
                             "reporting.get_data",
-                            [[graph_spec], {"start": now - 120, "end": now}],
+                            [[graph_spec], {"start": now - 300, "end": now}],
                         )
-                    except (TrueNASAPIError, TrueNASTimeoutError):
+                    except (TrueNASAPIError, TrueNASTimeoutError) as err:
+                        if not hasattr(self, "_arc_hit_err_logged"):
+                            self._arc_hit_err_logged = True
+                            _LOGGER.warning(
+                                "TrueNAS ARC hit query failed: graph=%s, id=%s, err=%s",
+                                graph_name, id_val, err,
+                            )
                         continue
 
                     if not hasattr(self, "_arc_hit_logged"):
                         self._arc_hit_logged = True
                         _LOGGER.warning(
                             "TrueNAS ARC hit report(%s, id=%s): %s",
-                            graph_name, identifier,
+                            graph_name, id_val,
                             str(hit_report)[:600],
                         )
                     if isinstance(hit_report, list) and hit_report:

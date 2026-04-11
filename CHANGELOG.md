@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.6] - 2026-04-12
+
+### Fixed
+
+- ARC hit ratio: use `reporting.graphs` to discover ARC graph definitions including required identifiers
+- ARC hit ratio: log both success and failure for each attempt (was silently swallowing all errors)
+- ARC hit ratio: increased time window from 120s to 300s for graph queries
+
 ## [0.2.5] - 2026-04-12
 
 ### Fixed

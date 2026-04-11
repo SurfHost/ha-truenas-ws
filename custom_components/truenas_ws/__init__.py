@@ -83,7 +83,7 @@ def _async_cleanup_stale_entities(
             or ("_sent" in eid and "eno" in eid)
         )
         if is_net:
-            _LOGGER.warning("Removing stale network entity: %s (uid=%s)", eid, uid)
+            _LOGGER.info("Removing stale network entity: %s", eid)
             ent_reg.async_remove(entity.entity_id)
 
 
