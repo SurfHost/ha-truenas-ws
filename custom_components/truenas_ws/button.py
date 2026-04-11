@@ -62,6 +62,7 @@ class TrueNASRebootButton(TrueNASEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Reboot the system."""
+        _LOGGER.info("Reboot button pressed — sending reboot command")
         await self.coordinator.client.reboot()
 
 
@@ -86,6 +87,7 @@ class TrueNASShutdownButton(TrueNASEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Shutdown the system."""
+        _LOGGER.info("Shutdown button pressed — sending shutdown command")
         await self.coordinator.client.shutdown()
 
 

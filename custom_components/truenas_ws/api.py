@@ -779,19 +779,48 @@ class TrueNASWebSocketClient:
 
     async def reboot(self) -> None:
         """Reboot the system."""
-        try:
-            await self._send_request("system.reboot")
-        except (TrueNASConnectionError, TrueNASTimeoutError):
-            # Expected: system disconnects before responding
-            pass
+        await self._send_fire_and_forget("system.reboot")
 
     async def shutdown(self) -> None:
         """Shutdown the system."""
+        await self._send_fire_and_forget("system.shutdown")
+
+    async def _send_fire_and_forget(
+        self, method: str, params: list[Any] | None = None
+    ) -> None:
+        """Send a request without waiting for a response.
+
+        Used for system.reboot / system.shutdown where TrueNAS disconnects
+        before it can send a response.
+        """
+        if not self._connected or self._ws is None or self._ws.closed:
+            raise TrueNASConnectionError("Not connected")
+
+        request_id = self._next_id
+        self._next_id += 1
+
+        if self._is_legacy:
+            message: dict[str, Any] = {
+                "msg": "method",
+                "method": method,
+                "id": str(request_id),
+            }
+        else:
+            message = {
+                "jsonrpc": "2.0",
+                "method": method,
+                "id": request_id,
+            }
+        if params is not None:
+            message["params"] = params
+
         try:
-            await self._send_request("system.shutdown")
-        except (TrueNASConnectionError, TrueNASTimeoutError):
-            # Expected: system disconnects before responding
-            pass
+            await self._ws.send_json(message)
+            _LOGGER.info("Sent %s command (fire-and-forget)", method)
+        except (ConnectionError, TypeError) as err:
+            raise TrueNASConnectionError(
+                f"Failed to send {method}: {err}"
+            ) from err
 
     async def create_snapshot(self, dataset: str, name: str) -> None:
         """Create a ZFS snapshot."""

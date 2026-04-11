@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1] - 2026-04-12
+
+### Fixed
+
+- Reboot and Shutdown buttons now work — use fire-and-forget pattern (send command, don't wait for response that never arrives)
+- Cloud Sync and Replication tasks now appear under Tasks device — fixed overly broad entity cleanup that was deleting new task entities on startup
+- Added logging to reboot/shutdown button presses for diagnostics
+
 ## [0.3.0] - 2026-04-12
 
 ### Added
