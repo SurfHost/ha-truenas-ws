@@ -88,7 +88,6 @@ class SystemStats:
         mem_pct = 0.0
         arc_size = 0
         arc_max = 0
-        arc_hit = 0.0
         cpu_temp: float | None = None
 
         if memory_data:
@@ -99,7 +98,6 @@ class SystemStats:
                 mem_pct = round(mem_used / mem_total * 100, 1)
             arc_size = int(memory_data.get("arc_size", 0))
             arc_max = int(memory_data.get("arc_max", 0))
-            arc_hit = float(memory_data.get("arc_hit_ratio", 0))
 
         if reporting_data and "cpu_temp" in reporting_data:
             temp = reporting_data["cpu_temp"]
@@ -113,7 +111,7 @@ class SystemStats:
             memory_free_bytes=mem_free,
             arc_size=arc_size,
             arc_max=arc_max,
-            arc_hit_ratio=arc_hit,
+            arc_hit_ratio=0.0,
             cpu_temperature=cpu_temp,
         )
 

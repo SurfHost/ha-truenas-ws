@@ -175,19 +175,6 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         else None,
     ),
     TrueNASSensorEntityDescription(
-        key="arc_hit_ratio",
-        translation_key="arc_hit_ratio",
-        name="ARC hit ratio",
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=1,
-        icon="mdi:bullseye-arrow",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.system_stats.arc_hit_ratio
-        if data.system_stats and data.system_stats.arc_hit_ratio > 0
-        else None,
-    ),
-    TrueNASSensorEntityDescription(
         key="alerts",
         translation_key="alerts",
         name="Active alerts",

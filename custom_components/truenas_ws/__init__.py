@@ -76,14 +76,18 @@ def _async_cleanup_stale_entities(
     for entity in entries:
         uid = entity.unique_id or ""
         eid = entity.entity_id or ""
-        # Remove network per-interface sensors (removed in v0.2.0)
-        is_net = (
+        # Remove stale entities from removed features
+        is_stale = (
+            # Network per-interface sensors (removed in v0.2.0)
             ("_net_" in uid and ("_received" in uid or "_sent" in uid))
             or ("_received" in eid and "eno" in eid)
             or ("_sent" in eid and "eno" in eid)
+            # ARC hit ratio sensor (removed in v0.2.9)
+            or "arc_hit_ratio" in uid
+            or "arc_hit_ratio" in eid
         )
-        if is_net:
-            _LOGGER.info("Removing stale network entity: %s", eid)
+        if is_stale:
+            _LOGGER.info("Removing stale entity: %s", eid)
             ent_reg.async_remove(entity.entity_id)
 
 

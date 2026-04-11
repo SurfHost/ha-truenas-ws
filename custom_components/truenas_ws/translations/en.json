@@ -49,7 +49,6 @@
       "load_avg_15": { "name": "Load average (15 min)" },
       "uptime": { "name": "Uptime" },
       "arc_size": { "name": "ARC size" },
-      "arc_hit_ratio": { "name": "ARC hit ratio" },
       "alerts": { "name": "Active alerts" },
       "pool_status": { "name": "Status" },
       "pool_used": { "name": "Used space" },

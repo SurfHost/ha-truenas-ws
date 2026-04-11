@@ -61,6 +61,7 @@ class TrueNASWebSocketClient:
         self._is_legacy: bool = False  # True if using /websocket (DDP)
         self._next_id = 0
         self._pending: dict[int, asyncio.Future[Any]] = {}
+        self._pending_str: dict[str, asyncio.Future[Any]] = {}
         self._listen_task: asyncio.Task[None] | None = None
         self._connected = False
         self._collection_callbacks: dict[
@@ -159,8 +160,7 @@ class TrueNASWebSocketClient:
                     TrueNASConnectionError("WebSocket disconnected")
                 )
         self._pending.clear()
-        if hasattr(self, "_pending_str"):
-            self._pending_str.clear()
+        self._pending_str.clear()
 
     async def _authenticate(self) -> None:
         """Authenticate with API key."""
@@ -266,9 +266,6 @@ class TrueNASWebSocketClient:
         future: asyncio.Future[Any] = loop.create_future()
         # Store with both int and str key for matching
         self._pending[request_id] = future
-        self._pending_str: dict[str, asyncio.Future[Any]]
-        if not hasattr(self, "_pending_str"):
-            self._pending_str = {}
         self._pending_str[str_id] = future
 
         try:
@@ -326,8 +323,7 @@ class TrueNASWebSocketClient:
             # DDP response
             msg_id = data.get("id")
             if msg_id is not None:
-                pending_str = getattr(self, "_pending_str", {})
-                future = pending_str.pop(str(msg_id), None)
+                future = self._pending_str.pop(str(msg_id), None)
                 # Also clean int pending
                 try:
                     self._pending.pop(int(msg_id), None)
@@ -411,7 +407,6 @@ class TrueNASWebSocketClient:
         mem_pct = 0.0
         arc_size = 0
         arc_max = 0
-        arc_hit = 0.0
         cpu_temp: float | None = None
 
         # Try reporting.realtime first
@@ -445,8 +440,6 @@ class TrueNASWebSocketClient:
                     mem_free = int(mem_raw.get("free", 0))
                     arc_size = int(mem_raw.get("arc_size", 0))
                     arc_max = int(mem_raw.get("arc_max", 0))
-                    if mem_raw.get("arc_hit_ratio"):
-                        arc_hit = float(mem_raw["arc_hit_ratio"])
 
                     # Some TrueNAS versions put memory under 'classes'
                     if mem_used == 0 and "classes" in mem_raw:
@@ -580,62 +573,6 @@ class TrueNASWebSocketClient:
                 except (TrueNASAPIError, TrueNASTimeoutError):
                     pass
 
-        # ARC hit ratio — try multiple API call formats
-        arc_hit_found = arc_hit > 0
-        if not arc_hit_found:
-            now = int(time_mod.time())
-            graph_name = "demanddatahitpercentage"
-
-            # Try different parameter formats for reporting.get_data
-            # Format A: [[{spec}], {query}] — works for arcsize/memory/cputemp
-            # Format B: [[{spec with identifier}], {query}]
-            # Format C: [{spec}, {query}] — no list wrapper around spec
-            attempts: list[tuple[str, list[Any]]] = [
-                ("A: list+spec", [[{"name": graph_name}], {"start": now - 300, "end": now}]),
-                ("B: list+spec+id", [[{"name": graph_name, "identifier": graph_name}], {"start": now - 300, "end": now}]),
-                ("C: spec only", [{"name": graph_name}, {"start": now - 300, "end": now}]),
-                ("D: graphs+query", [{"graphs": [{"name": graph_name}], "reporting_query": {"start": now - 300, "end": now}}]),
-            ]
-
-            errors: list[str] = []
-            for label, params in attempts:
-                if arc_hit_found:
-                    break
-                try:
-                    hit_report = await self._send_request(
-                        "reporting.get_data", params,
-                    )
-                except (TrueNASAPIError, TrueNASTimeoutError) as err:
-                    errors.append(f"{label}: {err}")
-                    continue
-
-                if not hasattr(self, "_arc_hit_logged"):
-                    self._arc_hit_logged = True
-                    _LOGGER.warning(
-                        "TrueNAS ARC hit SUCCESS with %s: %s",
-                        label,
-                        str(hit_report)[:600],
-                    )
-                result_list = hit_report if isinstance(hit_report, list) else [hit_report]
-                for report in result_list:
-                    if arc_hit_found:
-                        break
-                    if isinstance(report, dict):
-                        data_points = report.get("data", [])
-                        if data_points:
-                            for row in reversed(data_points):
-                                if isinstance(row, list) and len(row) >= 2:
-                                    if row[1] is not None:
-                                        arc_hit = float(row[1])
-                                            arc_hit_found = True
-                                            break
-
-            if not arc_hit_found and not hasattr(self, "_arc_hit_err_logged"):
-                self._arc_hit_err_logged = True
-                _LOGGER.warning(
-                    "TrueNAS ARC hit ratio: all attempts failed: %s", errors,
-                )
-
         # Try to get CPU temperature
         if cpu_temp is None:
             try:
@@ -665,7 +602,7 @@ class TrueNASWebSocketClient:
             memory_free_bytes=mem_free,
             arc_size=arc_size,
             arc_max=arc_max,
-            arc_hit_ratio=arc_hit,
+            arc_hit_ratio=0.0,
             cpu_temperature=cpu_temp,
         )
 

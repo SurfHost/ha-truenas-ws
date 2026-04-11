@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.9] - 2026-04-12
+
+### Removed
+
+- ARC hit ratio sensor — TrueNAS reporting API does not support querying this graph via WebSocket
+- ARC hit ratio entity auto-cleaned on startup
+
+### Fixed
+
+- Code cleanup: `_pending_str` dict properly initialized in `__init__` instead of lazy hasattr pattern
+- Code cleanup: removed dead arc_hit variable and API parsing code
+- Code cleanup: removed translation entries for arc_hit_ratio
+
 ## [0.2.8] - 2026-04-12
 
 ### Fixed
