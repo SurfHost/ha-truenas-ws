@@ -786,38 +786,22 @@ class TrueNASWebSocketClient:
         await self._send_system_command("system.shutdown")
 
     async def _send_system_command(self, method: str) -> None:
-        """Send a system command (reboot/shutdown) with diagnostic logging.
+        """Send a system command (reboot/shutdown).
 
-        Tries the command with a short timeout. TrueNAS may disconnect before
-        responding, which is expected and fine — the command was already sent.
+        TrueNAS returns a job ID and acts on it asynchronously.
+        The WebSocket may disconnect before we receive the response.
         """
-        _LOGGER.warning("Sending %s command to TrueNAS", method)
-
         if not self._connected or self._ws is None or self._ws.closed:
-            _LOGGER.error("Cannot send %s: WebSocket not connected", method)
             raise TrueNASConnectionError("Not connected")
 
-        # Try with a short timeout — we just need to know if TrueNAS accepted it
         try:
-            result = await asyncio.wait_for(
+            await asyncio.wait_for(
                 self._send_request(method, ["Home Assistant"]),
                 timeout=10.0,
             )
-            _LOGGER.warning(
-                "%s response from TrueNAS: %s (type: %s)",
-                method,
-                result,
-                type(result).__name__,
-            )
-        except TrueNASAPIError as err:
-            _LOGGER.warning("%s returned API error: %s", method, err)
-            raise
         except (TrueNASConnectionError, TrueNASTimeoutError, TimeoutError):
-            # Expected: system may disconnect before responding
-            _LOGGER.warning(
-                "%s sent (connection lost — system should be acting on it)",
-                method,
-            )
+            # Expected: system disconnects as it reboots/shuts down
+            pass
 
     async def create_snapshot(self, dataset: str, name: str) -> None:
         """Create a ZFS snapshot."""

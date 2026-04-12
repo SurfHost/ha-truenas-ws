@@ -1,27 +1,12 @@
 # Changelog
 
-## [0.3.3] - 2026-04-12
+## [0.3.4] - 2026-04-12
 
 ### Fixed
 
-- Reboot/Shutdown diagnostic: log TrueNAS response at WARNING level (was INFO, invisible in default log)
-- Reboot/Shutdown: send reason string parameter `"Home Assistant"` (TrueNAS `system.reboot` expects a reason string, not empty params)
-
-## [0.3.2] - 2026-04-12
-
-### Fixed
-
-- Reboot/Shutdown: send command with explicit `params: []` (some JSON-RPC servers reject requests without params field)
-- Reboot/Shutdown: added WARNING-level diagnostic logging to diagnose whether button press reaches TrueNAS and what it responds
-- Reboot/Shutdown: use 10s timeout instead of 30s — if the system accepts the command, it disconnects quickly
-
-## [0.3.1] - 2026-04-12
-
-### Fixed
-
-- Reboot and Shutdown buttons now work — use fire-and-forget pattern (send command, don't wait for response that never arrives)
+- Reboot and Shutdown buttons now work — send reason string parameter and use short timeout (TrueNAS returns a job ID then disconnects)
 - Cloud Sync and Replication tasks now appear under Tasks device — fixed overly broad entity cleanup that was deleting new task entities on startup
-- Added logging to reboot/shutdown button presses for diagnostics
+- Code cleanup: removed all diagnostic logging, removed unused imports
 
 ## [0.3.0] - 2026-04-12
 

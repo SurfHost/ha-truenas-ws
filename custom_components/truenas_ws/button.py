@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
@@ -13,8 +12,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
 from .entity import DEVICE_KEY_STORAGE, DEVICE_KEY_SYSTEM, TrueNASEntity
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -62,13 +59,7 @@ class TrueNASRebootButton(TrueNASEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Reboot the system."""
-        _LOGGER.warning("Reboot button pressed — sending reboot command")
-        try:
-            await self.coordinator.client.reboot()
-            _LOGGER.warning("Reboot command completed successfully")
-        except Exception as err:
-            _LOGGER.error("Reboot command failed: %s", err)
-            raise
+        await self.coordinator.client.reboot()
 
 
 class TrueNASShutdownButton(TrueNASEntity, ButtonEntity):
@@ -92,13 +83,7 @@ class TrueNASShutdownButton(TrueNASEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Shutdown the system."""
-        _LOGGER.warning("Shutdown button pressed — sending shutdown command")
-        try:
-            await self.coordinator.client.shutdown()
-            _LOGGER.warning("Shutdown command completed successfully")
-        except Exception as err:
-            _LOGGER.error("Shutdown command failed: %s", err)
-            raise
+        await self.coordinator.client.shutdown()
 
 
 class TrueNASSnapshotButton(TrueNASEntity, ButtonEntity):
