@@ -3,9 +3,6 @@
 [![Validate](https://github.com/SurfHost/ha-truenas-ws/actions/workflows/validate.yml/badge.svg)](https://github.com/SurfHost/ha-truenas-ws/actions/workflows/validate.yml)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
-[![Add Repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=SurfHost&repository=ha-truenas-ws&category=integration)
-[![Add Integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=truenas_ws)
-
 Custom Home Assistant integration for TrueNAS SCALE using the modern **JSON-RPC 2.0 WebSocket API**.
 
 ## Features
@@ -43,6 +40,10 @@ Custom Home Assistant integration for TrueNAS SCALE using the modern **JSON-RPC 
 
 ### HACS (Recommended)
 
+[![Add Repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=SurfHost&repository=ha-truenas-ws&category=integration)
+
+Or manually:
+
 1. Open HACS in Home Assistant
 2. Click the three dots menu → **Custom repositories**
 3. Add `SurfHost/ha-truenas-ws` with category **Integration**
@@ -51,9 +52,15 @@ Custom Home Assistant integration for TrueNAS SCALE using the modern **JSON-RPC 
 
 ### Manual
 
-Copy the `custom_components/truenas_ws` folder to your Home Assistant `custom_components/` directory and restart.
+1. Download the `custom_components/truenas_ws` folder
+2. Place it in your Home Assistant `config/custom_components/` directory
+3. Restart Home Assistant
 
 ## Configuration
+
+[![Add Integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=truenas_ws)
+
+Or manually:
 
 1. In TrueNAS, go to **System → API Keys** and create a new API key
 2. In Home Assistant, go to **Settings → Integrations → Add Integration**
