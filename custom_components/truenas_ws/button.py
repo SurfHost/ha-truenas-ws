@@ -62,8 +62,13 @@ class TrueNASRebootButton(TrueNASEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Reboot the system."""
-        _LOGGER.info("Reboot button pressed — sending reboot command")
-        await self.coordinator.client.reboot()
+        _LOGGER.warning("Reboot button pressed — sending reboot command")
+        try:
+            await self.coordinator.client.reboot()
+            _LOGGER.warning("Reboot command completed successfully")
+        except Exception as err:
+            _LOGGER.error("Reboot command failed: %s", err)
+            raise
 
 
 class TrueNASShutdownButton(TrueNASEntity, ButtonEntity):
@@ -87,8 +92,13 @@ class TrueNASShutdownButton(TrueNASEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Shutdown the system."""
-        _LOGGER.info("Shutdown button pressed — sending shutdown command")
-        await self.coordinator.client.shutdown()
+        _LOGGER.warning("Shutdown button pressed — sending shutdown command")
+        try:
+            await self.coordinator.client.shutdown()
+            _LOGGER.warning("Shutdown command completed successfully")
+        except Exception as err:
+            _LOGGER.error("Shutdown command failed: %s", err)
+            raise
 
 
 class TrueNASSnapshotButton(TrueNASEntity, ButtonEntity):

@@ -779,48 +779,40 @@ class TrueNASWebSocketClient:
 
     async def reboot(self) -> None:
         """Reboot the system."""
-        await self._send_fire_and_forget("system.reboot")
+        await self._send_system_command("system.reboot")
 
     async def shutdown(self) -> None:
         """Shutdown the system."""
-        await self._send_fire_and_forget("system.shutdown")
+        await self._send_system_command("system.shutdown")
 
-    async def _send_fire_and_forget(
-        self, method: str, params: list[Any] | None = None
-    ) -> None:
-        """Send a request without waiting for a response.
+    async def _send_system_command(self, method: str) -> None:
+        """Send a system command (reboot/shutdown) with diagnostic logging.
 
-        Used for system.reboot / system.shutdown where TrueNAS disconnects
-        before it can send a response.
+        Tries the command with a short timeout. TrueNAS may disconnect before
+        responding, which is expected and fine — the command was already sent.
         """
+        _LOGGER.info("Sending %s command to TrueNAS", method)
+
         if not self._connected or self._ws is None or self._ws.closed:
+            _LOGGER.error("Cannot send %s: WebSocket not connected", method)
             raise TrueNASConnectionError("Not connected")
 
-        request_id = self._next_id
-        self._next_id += 1
-
-        if self._is_legacy:
-            message: dict[str, Any] = {
-                "msg": "method",
-                "method": method,
-                "id": str(request_id),
-            }
-        else:
-            message = {
-                "jsonrpc": "2.0",
-                "method": method,
-                "id": request_id,
-            }
-        if params is not None:
-            message["params"] = params
-
+        # Try with a short timeout — we just need to know if TrueNAS accepted it
         try:
-            await self._ws.send_json(message)
-            _LOGGER.info("Sent %s command (fire-and-forget)", method)
-        except (ConnectionError, TypeError) as err:
-            raise TrueNASConnectionError(
-                f"Failed to send {method}: {err}"
-            ) from err
+            result = await asyncio.wait_for(
+                self._send_request(method, []),
+                timeout=10.0,
+            )
+            _LOGGER.info("%s accepted by TrueNAS, response: %s", method, result)
+        except TrueNASAPIError as err:
+            _LOGGER.warning("%s returned API error: %s", method, err)
+            raise
+        except (TrueNASConnectionError, TrueNASTimeoutError, TimeoutError):
+            # Expected: system may disconnect before responding
+            _LOGGER.info(
+                "%s sent successfully (connection lost — system is acting on it)",
+                method,
+            )
 
     async def create_snapshot(self, dataset: str, name: str) -> None:
         """Create a ZFS snapshot."""

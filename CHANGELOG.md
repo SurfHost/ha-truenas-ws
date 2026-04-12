@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2] - 2026-04-12
+
+### Fixed
+
+- Reboot/Shutdown: send command with explicit `params: []` (some JSON-RPC servers reject requests without params field)
+- Reboot/Shutdown: added WARNING-level diagnostic logging to diagnose whether button press reaches TrueNAS and what it responds
+- Reboot/Shutdown: use 10s timeout instead of 30s — if the system accepts the command, it disconnects quickly
+
 ## [0.3.1] - 2026-04-12
 
 ### Fixed
