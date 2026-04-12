@@ -47,7 +47,7 @@ async def async_setup_entry(
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Clean up stale network entities (removed in v0.2.0)
+    # Clean up entities from removed/reorganized features
     _async_cleanup_stale_entities(hass, entry)
 
     entry.async_on_unload(

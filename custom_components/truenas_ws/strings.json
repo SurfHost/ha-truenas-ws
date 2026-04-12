@@ -60,13 +60,12 @@
       "dataset_used": { "name": "Used space" },
       "dataset_available": { "name": "Available space" },
       "dataset_usage_percent": { "name": "Usage" },
-      "net_received": { "name": "Received" },
-      "net_sent": { "name": "Sent" },
       "app_status": { "name": "Status" },
       "vm_status": { "name": "Status" },
       "replication_status": { "name": "Replication" },
       "snapshot_task_status": { "name": "Snapshot task" },
-      "cloudsync_status": { "name": "Cloud sync" }
+      "cloudsync_status": { "name": "Cloud sync" },
+      "rsync_status": { "name": "Rsync" }
     },
     "binary_sensor": {
       "system_healthy": { "name": "System problem" },

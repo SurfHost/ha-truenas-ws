@@ -9,7 +9,8 @@ DOMAIN: Final = "truenas_ws"
 CONF_API_KEY: Final = "api_key"
 
 DEFAULT_SCAN_INTERVAL: Final = 30
-DEFAULT_SYSTEM_INFO_INTERVAL: Final = 43200  # 12 hours in seconds
+DEFAULT_SYSTEM_INFO_INTERVAL: Final = 43200  # 12 hours
+DEFAULT_TASKS_INTERVAL: Final = 300  # 5 minutes
 
 ATTR_MODEL: Final = "model"
 ATTR_SERIAL: Final = "serial"

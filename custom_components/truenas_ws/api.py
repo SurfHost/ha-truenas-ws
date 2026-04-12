@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import ssl
+import time
 from typing import Any
 
 import aiohttp
@@ -399,7 +400,6 @@ class TrueNASWebSocketClient:
 
     async def get_system_stats(self) -> SystemStats:
         """Get real-time system statistics using multiple API methods."""
-        import time as time_mod
 
         cpu_usage = 0.0
         mem_total = 0
@@ -479,7 +479,7 @@ class TrueNASWebSocketClient:
 
         # Fallback: get memory from reporting.get_data
         if mem_used == 0:
-            now = int(time_mod.time())
+            now = int(time.time())
             try:
                 mem_report = await self._send_request(
                     "reporting.get_data",
@@ -552,7 +552,7 @@ class TrueNASWebSocketClient:
 
         # ARC stats from separate query if not yet populated
         if arc_size == 0:
-            now = int(time_mod.time())
+            now = int(time.time())
             for graph_name in ("arcsize", "zfs_arc_size"):
                 if arc_size > 0:
                     break
@@ -577,7 +577,7 @@ class TrueNASWebSocketClient:
         # Try to get CPU temperature
         if cpu_temp is None:
             try:
-                now = int(time_mod.time())
+                now = int(time.time())
                 temps = await self._send_request("reporting.get_data", [
                     [{"name": "cputemp"}],
                     {"start": now - 120, "end": now},

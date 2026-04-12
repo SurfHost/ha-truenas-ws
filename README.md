@@ -45,7 +45,7 @@ Custom Home Assistant integration for TrueNAS SCALE using the modern **JSON-RPC 
 
 ### Manual
 
-Copy the `custom_components/truenas` folder to your Home Assistant `custom_components/` directory and restart.
+Copy the `custom_components/truenas_ws` folder to your Home Assistant `custom_components/` directory and restart.
 
 ## Configuration
 

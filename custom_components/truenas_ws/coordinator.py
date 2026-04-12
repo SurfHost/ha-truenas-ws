@@ -13,7 +13,12 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import TrueNASWebSocketClient
-from .const import DEFAULT_SCAN_INTERVAL, DEFAULT_SYSTEM_INFO_INTERVAL, DOMAIN
+from .const import (
+    DEFAULT_SCAN_INTERVAL,
+    DEFAULT_SYSTEM_INFO_INTERVAL,
+    DEFAULT_DEFAULT_TASKS_INTERVAL,
+    DOMAIN,
+)
 from .errors import (
     TrueNASAuthenticationError,
     TrueNASConnectionError,
@@ -26,7 +31,6 @@ _LOGGER = logging.getLogger(__name__)
 
 type TrueNASConfigEntry = ConfigEntry[TrueNASDataUpdateCoordinator]
 
-TASKS_INTERVAL = 300  # 5 minutes
 
 
 class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
@@ -129,7 +133,7 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
                 )
 
             # Tasks every 10th cycle (~5 min)
-            if self._poll_count % 10 == 0 or now - self._last_tasks > TASKS_INTERVAL:
+            if self._poll_count % 10 == 0 or now - self._last_tasks > DEFAULT_TASKS_INTERVAL:
                 data.replication_tasks = await self._safe_fetch(
                     self.client.get_replication_tasks, data.replication_tasks
                 )
@@ -175,7 +179,7 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
         except TrueNASAuthenticationError:
             raise
         except TrueNASError as err:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Failed to fetch %s, using cached data: %s",
                 fetch_fn.__name__,
                 err,
