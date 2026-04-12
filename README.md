@@ -1,6 +1,7 @@
 # TrueNAS Integration for Home Assistant
 
 [![Validate](https://github.com/SurfHost/ha-truenas-ws/actions/workflows/validate.yml/badge.svg)](https://github.com/SurfHost/ha-truenas-ws/actions/workflows/validate.yml)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
 Custom Home Assistant integration for TrueNAS SCALE using the modern **JSON-RPC 2.0 WebSocket API**.
 

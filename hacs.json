@@ -1,6 +1,5 @@
 {
   "name": "TrueNAS",
   "render_readme": true,
-  "homeassistant": "2024.3.0",
-  "icon": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/truenas-core.svg"
+  "homeassistant": "2024.3.0"
 }
