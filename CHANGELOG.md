@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3] - 2026-04-12
+
+### Fixed
+
+- Reboot/Shutdown diagnostic: log TrueNAS response at WARNING level (was INFO, invisible in default log)
+- Reboot/Shutdown: send reason string parameter `"Home Assistant"` (TrueNAS `system.reboot` expects a reason string, not empty params)
+
 ## [0.3.2] - 2026-04-12
 
 ### Fixed
