@@ -9,16 +9,13 @@ Custom Home Assistant integration for TrueNAS SCALE using the modern **JSON-RPC 
 - Memory usage (used/free/percentage)
 - System load averages (1/5/15 min)
 - System uptime
-- ZFS ARC size & hit ratio
+- ZFS ARC size
 - Active alerts count
 
 ### Storage
-- **Pools**: Status, health, used/free/total space, usage %, fragmentation
+- **Pools**: Status, health, used/free/total space, usage %, fragmentation (includes boot pool)
 - **Datasets**: Used/available space, usage percentage
 - **Disks**: Temperature per disk
-
-### Network
-- Per-interface received/sent bytes (cumulative)
 
 ### Services, Apps & VMs
 - Service status monitoring with start/stop switches
@@ -29,6 +26,7 @@ Custom Home Assistant integration for TrueNAS SCALE using the modern **JSON-RPC 
 - Replication task status & last run
 - Snapshot task status & last run
 - Cloud sync task status & last run
+- Rsync task status & last run
 
 ### System Control
 - Reboot & shutdown buttons
