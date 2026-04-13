@@ -216,7 +216,7 @@ async def async_setup_entry(
     # Dataset sensors (only enable top-level datasets by default, depth <= 1)
     for dataset in coordinator.data.datasets:
         depth = dataset.id.count("/")
-        enabled = depth <= 1  # e.g. "nvme" (0) and "nvme/Docker" (1)
+        enabled = depth == 0  # only root pool datasets (e.g. "nvme", "raid")
         for desc in _dataset_sensors(dataset.id, enabled_default=enabled):
             entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_STORAGE))
 
@@ -322,7 +322,6 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             name=f"{pool_name} total",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
-            state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=2,
             icon="mdi:database",
             entity_category=EntityCategory.DIAGNOSTIC,
@@ -347,7 +346,6 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             key=f"pool_{pool_name}_fragmentation",
             name=f"{pool_name} fragmentation",
             native_unit_of_measurement=PERCENTAGE,
-            state_class=SensorStateClass.MEASUREMENT,
             icon="mdi:chart-bubble",
             entity_category=EntityCategory.DIAGNOSTIC,
             value_fn=lambda data, _p=pool_name: p.fragmentation

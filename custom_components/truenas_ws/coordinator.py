@@ -14,9 +14,11 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import TrueNASWebSocketClient
 from .const import (
+    DEFAULT_DATASET_INTERVAL,
+    DEFAULT_DISK_POOL_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYSTEM_INFO_INTERVAL,
-    DEFAULT_DEFAULT_TASKS_INTERVAL,
+    DEFAULT_TASKS_INTERVAL,
     DOMAIN,
 )
 from .errors import (
@@ -52,9 +54,10 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
             update_interval=timedelta(seconds=scan_interval),
         )
         self.client = client
-        self._poll_count = 0
-        self._last_system_info: float = 0
+        self._last_disk_pool: float = 0
+        self._last_datasets: float = 0
         self._last_tasks: float = 0
+        self._last_system_info: float = 0
         self._previous_network: dict[str, tuple[int, int, float]] = {}
 
     async def _async_setup(self) -> None:
@@ -78,38 +81,14 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
 
         data = self.data or TrueNASData()
         now = time.monotonic()
-        self._poll_count += 1
 
         try:
-            # Always fetch on every cycle (30s)
-            data.disks = await self._safe_fetch(
-                self.client.get_disks, data.disks
+            # ── Fast tier: every cycle (2 min) ──────────────────────
+            data.system_stats = await self._safe_fetch(
+                self.client.get_system_stats, data.system_stats
             )
-
-            # Update disk temperatures
-            temps = await self._safe_fetch(
-                self.client.get_disk_temperatures, {}
-            )
-            if temps:
-                updated_disks = []
-                for disk in data.disks:
-                    temp = temps.get(disk.name)
-                    if temp is not None and temp != disk.temperature:
-                        from dataclasses import replace
-
-                        updated_disks.append(replace(disk, temperature=temp))
-                    else:
-                        updated_disks.append(disk)
-                data.disks = updated_disks
-
-            data.pools = await self._safe_fetch(
-                self.client.get_pools, data.pools
-            )
-            data.datasets = await self._safe_fetch(
-                self.client.get_datasets, data.datasets
-            )
-            data.network_interfaces = await self._safe_fetch(
-                self.client.get_network_interfaces, data.network_interfaces
+            data.alerts = await self._safe_fetch(
+                self.client.get_alerts, data.alerts
             )
             data.services = await self._safe_fetch(
                 self.client.get_services, data.services
@@ -121,19 +100,43 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
                 self.client.get_vms, data.vms
             )
 
-            # System stats every cycle
-            data.system_stats = await self._safe_fetch(
-                self.client.get_system_stats, data.system_stats
-            )
-
-            # Alerts every 2nd cycle (~60s)
-            if self._poll_count % 2 == 0:
-                data.alerts = await self._safe_fetch(
-                    self.client.get_alerts, data.alerts
+            # ── Medium tier: every ~5 min ───────────────────────────
+            if not self._last_disk_pool or now - self._last_disk_pool > DEFAULT_DISK_POOL_INTERVAL:
+                data.disks = await self._safe_fetch(
+                    self.client.get_disks, data.disks
                 )
+                temps = await self._safe_fetch(
+                    self.client.get_disk_temperatures, {}
+                )
+                if temps:
+                    from dataclasses import replace
 
-            # Tasks every 10th cycle (~5 min)
-            if self._poll_count % 10 == 0 or now - self._last_tasks > DEFAULT_TASKS_INTERVAL:
+                    updated_disks = []
+                    for disk in data.disks:
+                        temp = temps.get(disk.name)
+                        if temp is not None and temp != disk.temperature:
+                            updated_disks.append(replace(disk, temperature=temp))
+                        else:
+                            updated_disks.append(disk)
+                    data.disks = updated_disks
+
+                data.pools = await self._safe_fetch(
+                    self.client.get_pools, data.pools
+                )
+                data.network_interfaces = await self._safe_fetch(
+                    self.client.get_network_interfaces, data.network_interfaces
+                )
+                self._last_disk_pool = now
+
+            # ── Slow tier: every ~15 min ────────────────────────────
+            if not self._last_datasets or now - self._last_datasets > DEFAULT_DATASET_INTERVAL:
+                data.datasets = await self._safe_fetch(
+                    self.client.get_datasets, data.datasets
+                )
+                self._last_datasets = now
+
+            # ── Tasks: every ~5 min ─────────────────────────────────
+            if not self._last_tasks or now - self._last_tasks > DEFAULT_TASKS_INTERVAL:
                 data.replication_tasks = await self._safe_fetch(
                     self.client.get_replication_tasks, data.replication_tasks
                 )
@@ -148,7 +151,7 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
                 )
                 self._last_tasks = now
 
-            # System info + update check every 12 hours
+            # ── System info + update check: every 12 hours ──────────
             if (
                 data.system_info is None
                 or now - self._last_system_info > DEFAULT_SYSTEM_INFO_INTERVAL

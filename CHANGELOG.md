@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.5] - 2026-04-13
+
+### Changed
+
+- Default poll interval raised from 30s to 2 minutes to reduce database growth
+- Tiered polling: system stats every 2 min, disks/pools every 5 min, datasets every 15 min
+- Dataset sensors now disabled by default for all nested datasets (only root pool datasets enabled)
+- Removed long-term statistics tracking from pool total size and fragmentation sensors
+- Options flow scan interval range updated to 30–900 seconds (was 10–300)
+
+### Fixed
+
+- Fixed import typo: `DEFAULT_DEFAULT_TASKS_INTERVAL` → `DEFAULT_TASKS_INTERVAL`
+
 ## [0.3.4] - 2026-04-12
 
 ### Fixed
