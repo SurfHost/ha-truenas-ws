@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1] - 2026-04-15
+
+### Fixed
+
+- **System update install** — called the wrong method. `update.update` is a config setter (autocheck/profile), not the install action. Now uses `update.run` which is the actual install job.
+- **System update detection** — `update.status.code` values are `NORMAL`/`ERROR`, not `AVAILABLE`/`UNAVAILABLE`. Availability is now correctly derived from `status.new_version` being non-null, with proper parsing of `release_notes` and `current_version.version`.
+
 ## [0.4.0] - 2026-04-15
 
 ### Changed

@@ -42,43 +42,51 @@ RECONNECT_MAX_DELAY = 300.0
 
 
 def _parse_update_status(result: Any) -> UpdateInfo:
-    """Parse ``update.status`` response into an ``UpdateInfo``.
+    """Parse an ``update.status`` response into an ``UpdateInfo``.
 
-    TrueNAS SCALE 25+ returns ``{"status": {"code": ..., "new_version": {...}}}``.
+    TrueNAS SCALE 25+ returns::
+
+        {
+          "code": "NORMAL" | "ERROR",
+          "status": {
+            "current_version": {"train": ..., "profile": ..., ...},
+            "new_version": {"version": ..., "release_notes": ..., ...} | null,
+          } | null,
+          "error": {...} | null,
+        }
+
+    An update is available when ``status.new_version`` is not null.
     """
+    empty = UpdateInfo(
+        available=False, version=None, changelog=None, current_version=None
+    )
     if not isinstance(result, dict):
-        return UpdateInfo(
-            available=False, version=None, changelog=None, current_version=None
-        )
+        return empty
 
-    status_obj = result.get("status", result)
+    status_obj = result.get("status")
     if not isinstance(status_obj, dict):
+        return empty
+
+    new_ver = status_obj.get("new_version")
+    current_ver = status_obj.get("current_version")
+
+    current_version: str | None = None
+    if isinstance(current_ver, dict):
+        current_version = current_ver.get("version") or current_ver.get("train")
+
+    if not isinstance(new_ver, dict):
         return UpdateInfo(
-            available=False, version=None, changelog=None, current_version=None
+            available=False,
+            version=None,
+            changelog=None,
+            current_version=current_version,
         )
-
-    code = str(status_obj.get("code", status_obj.get("status", ""))).upper()
-    new_ver = status_obj.get("new_version") or status_obj.get("version")
-
-    available = code in ("AVAILABLE", "UPDATE_AVAILABLE", "REBOOT_REQUIRED")
-    version: str | None = None
-    changelog: str | None = None
-
-    if isinstance(new_ver, dict):
-        version = new_ver.get("version") or new_ver.get("name")
-        changelog = new_ver.get("changelog") or new_ver.get("notes")
-    elif isinstance(new_ver, str):
-        version = new_ver
-
-    if not available and version:
-        available = True
 
     return UpdateInfo(
-        available=available,
-        version=version,
-        changelog=changelog or result.get("changelog") or result.get("notes"),
-        current_version=result.get("current_version")
-        or status_obj.get("current_version"),
+        available=True,
+        version=new_ver.get("version"),
+        changelog=new_ver.get("release_notes") or new_ver.get("release_notes_url"),
+        current_version=current_version,
     )
 
 
@@ -608,16 +616,18 @@ class TrueNASWebSocketClient:
         )
 
     async def install_system_update(self) -> None:
-        """Download and apply the pending system update, then reboot.
+        """Download, apply and reboot for the pending system update.
 
-        The WebSocket will eventually disconnect as the system reboots.
+        Uses ``update.run`` — TrueNAS SCALE 25+ job that installs the latest
+        version from the current update profile. The WebSocket will
+        disconnect as the system reboots.
         """
         if not self._connected or self._ws is None or self._ws.closed:
             raise TrueNASConnectionError("Not connected")
 
         try:
             await asyncio.wait_for(
-                self._send_request("update.update", [{"reboot": True}]),
+                self._send_request("update.run", [{"reboot": True}]),
                 timeout=30.0,
             )
         except (TrueNASConnectionError, TrueNASTimeoutError, TimeoutError):
