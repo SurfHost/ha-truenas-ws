@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.7] - 2026-04-15
+
+### Added
+
+- **Install** button on the system update entity — applies the pending TrueNAS update via `update.update` and reboots
+- **Install** button on each app update entity — triggers `app.upgrade` to upgrade the application
+
 ## [0.3.6] - 2026-04-15
 
 ### Fixed

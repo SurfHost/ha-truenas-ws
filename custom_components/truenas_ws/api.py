@@ -809,3 +809,29 @@ class TrueNASWebSocketClient:
             "zfs.snapshot.create",
             [{"dataset": dataset, "name": name}],
         )
+
+    async def install_system_update(self) -> None:
+        """Download and apply the pending system update, then reboot.
+
+        TrueNAS returns a job ID and applies the update asynchronously.
+        The WebSocket will eventually disconnect as the system reboots.
+        """
+        if not self._connected or self._ws is None or self._ws.closed:
+            raise TrueNASConnectionError("Not connected")
+
+        try:
+            await asyncio.wait_for(
+                self._send_request("update.update", [{"reboot": True}]),
+                timeout=30.0,
+            )
+        except (TrueNASConnectionError, TrueNASTimeoutError, TimeoutError):
+            # Expected: system may disconnect during update/reboot
+            pass
+
+    async def upgrade_app(self, app_name: str) -> None:
+        """Upgrade a TrueNAS application to the latest version."""
+        try:
+            await self._send_request("app.upgrade", [app_name])
+        except TrueNASAPIError:
+            # Fall back to the legacy chart.release API
+            await self._send_request("chart.release.upgrade", [app_name])
