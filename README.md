@@ -5,6 +5,8 @@
 
 Custom Home Assistant integration for TrueNAS SCALE using the modern **JSON-RPC 2.0 WebSocket API**.
 
+> **⚠️ TrueNAS 26 — REST API is removed.** TrueNAS 26 (release notes) removes the REST API entirely; all integrations must use the WebSocket API. This integration uses the WebSocket API and will continue to work after upgrading to TrueNAS 26.
+
 ## Features
 
 ### System Monitoring
@@ -71,7 +73,13 @@ Or manually:
 ### Options
 
 After setup, you can configure:
-- **Update interval**: 10–300 seconds (default: 30s)
+- **Update interval**: 30–900 seconds (default: 120s)
+
+### System update entity & update profile
+
+The System update entity mirrors the **Update Profile** configured in TrueNAS (Settings → Update). If the profile is set to a pre-release track (`Developer`/`Nightly`), the entity will offer beta versions when you press **Install**. To avoid beta upgrades, set the profile to `Mission Critical` or `Release` in TrueNAS before installing updates from Home Assistant.
+
+The current profile is exposed as an attribute on the System update entity so you can see which track you're on.
 
 ## Requirements
 

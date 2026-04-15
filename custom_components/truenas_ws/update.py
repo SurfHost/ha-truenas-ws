@@ -60,9 +60,28 @@ class TrueNASSystemUpdateEntity(TrueNASEntity, UpdateEntity):
     def latest_version(self) -> str | None:
         """Return the latest version."""
         update = self.coordinator.data.update_info
-        if update and update.available and update.version:
+        installed = self.installed_version
+        if (
+            update
+            and update.available
+            and update.version
+            and update.version != installed
+        ):
             return update.version
-        return self.installed_version
+        return installed
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str] | None:
+        """Surface the active update profile and train."""
+        update = self.coordinator.data.update_info
+        if update is None:
+            return None
+        attrs: dict[str, str] = {}
+        if update.profile:
+            attrs["profile"] = update.profile
+        if update.train:
+            attrs["train"] = update.train
+        return attrs or None
 
     async def async_release_notes(self) -> str | None:
         """Return the release notes."""

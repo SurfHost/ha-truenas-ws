@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.4] - 2026-04-15
+
+### Fixed
+
+- System update entity now clears after the install completes. The coordinator resets the `system.info` cache on every WebSocket reconnect, so the new installed version is picked up immediately after the post-install reboot. Added a safety check that suppresses `latest_version` when it equals the installed version.
+
+### Added
+
+- Update profile and train are exposed as attributes on the System update entity (`profile`, `train`). Use these to verify which TrueNAS update track is active before pressing Install.
+
+### Documentation
+
+- README calls out that TrueNAS 26 removes the REST API; this integration uses the WebSocket API and is compatible with TrueNAS 26.
+- README describes how the system update profile controls whether beta versions are offered.
+
 ## [0.5.3] - 2026-04-15
 
 ### Changed

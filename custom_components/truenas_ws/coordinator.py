@@ -71,6 +71,7 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
 
     async def _async_update_data(self) -> TrueNASData:
         """Fetch data from TrueNAS."""
+        reconnected = False
         if not self.client.connected:
             try:
                 await self.client.connect()
@@ -78,9 +79,16 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
                 raise ConfigEntryAuthFailed(str(err)) from err
             except TrueNASConnectionError as err:
                 raise UpdateFailed(f"Cannot connect: {err}") from err
+            reconnected = True
 
         data = self.data or TrueNASData()
         now = time.monotonic()
+
+        # After a reconnect (e.g. a system reboot following an update),
+        # the installed version may have changed — force a refresh of
+        # system info and the update check on the next tier below.
+        if reconnected:
+            self._last_system_info = 0
 
         try:
             # ── Fast tier: every cycle (2 min) ──────────────────────

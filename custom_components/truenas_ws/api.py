@@ -71,8 +71,12 @@ def _parse_update_status(result: Any) -> UpdateInfo:
     current_ver = status_obj.get("current_version")
 
     current_version: str | None = None
+    profile: str | None = None
+    train: str | None = None
     if isinstance(current_ver, dict):
         current_version = current_ver.get("version") or current_ver.get("train")
+        profile = current_ver.get("profile")
+        train = current_ver.get("train")
 
     if not isinstance(new_ver, dict):
         return UpdateInfo(
@@ -80,6 +84,8 @@ def _parse_update_status(result: Any) -> UpdateInfo:
             version=None,
             changelog=None,
             current_version=current_version,
+            profile=profile,
+            train=train,
         )
 
     return UpdateInfo(
@@ -87,6 +93,8 @@ def _parse_update_status(result: Any) -> UpdateInfo:
         version=new_ver.get("version"),
         changelog=new_ver.get("release_notes") or new_ver.get("release_notes_url"),
         current_version=current_version,
+        profile=profile,
+        train=train,
     )
 
 

@@ -641,6 +641,8 @@ class UpdateInfo:
     version: str | None
     changelog: str | None
     current_version: str | None
+    profile: str | None = None
+    train: str | None = None
 
 
 @dataclass(slots=True)
