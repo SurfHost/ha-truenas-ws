@@ -12,6 +12,11 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFl
 from homeassistant.const import CONF_HOST, CONF_SCAN_INTERVAL, CONF_VERIFY_SSL
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
 from .api import TrueNASWebSocketClient
 from .const import CONF_API_KEY, DEFAULT_SCAN_INTERVAL, DOMAIN
@@ -20,11 +25,15 @@ from .errors import TrueNASAuthenticationError, TrueNASConnectionError
 
 _LOGGER = logging.getLogger(__name__)
 
+_API_KEY_SELECTOR = TextSelector(
+    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+)
+
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
-        vol.Required(CONF_API_KEY): str,
-        vol.Optional(CONF_VERIFY_SSL, default=False): bool,
+        vol.Required(CONF_API_KEY): _API_KEY_SELECTOR,
+        vol.Optional(CONF_VERIFY_SSL, default=True): bool,
     }
 )
 
@@ -124,7 +133,7 @@ class TrueNASConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reauth_confirm",
             data_schema=vol.Schema(
-                {vol.Required(CONF_API_KEY): str}
+                {vol.Required(CONF_API_KEY): _API_KEY_SELECTOR}
             ),
             errors=errors,
         )

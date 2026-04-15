@@ -96,13 +96,14 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         if data.system_stats and data.system_stats.memory_used_bytes > 0
         else None,
     ),
+    # memory_free is redundant with memory_used + memory_usage_percent for
+    # long-term stats; omit state_class to avoid duplicate LTS.
     TrueNASSensorEntityDescription(
         key="memory_free",
         translation_key="memory_free",
         name="Memory free",
         native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
         device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:memory",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -110,11 +111,12 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         if data.system_stats and data.system_stats.memory_free_bytes > 0
         else None,
     ),
+    # Load averages only refresh with system.info (every 12h), so long-term
+    # statistics would just repeat the same value hourly. Omit state_class.
     TrueNASSensorEntityDescription(
         key="load_avg_1",
         translation_key="load_avg_1",
         name="Load average (1 min)",
-        state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:gauge",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -126,7 +128,6 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         key="load_avg_5",
         translation_key="load_avg_5",
         name="Load average (5 min)",
-        state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:gauge",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -138,7 +139,6 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         key="load_avg_15",
         translation_key="load_avg_15",
         name="Load average (15 min)",
-        state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:gauge",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -305,12 +305,12 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             if (p := _find_pool(data))
             else None,
         ),
+        # Pool free is redundant with used + usage%; no LTS.
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_free",
             name=f"{pool_name} free",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
-            state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=2,
             icon="mdi:database",
             value_fn=lambda data, _p=pool_name: round(p.free / (1024**3), 2)
@@ -418,12 +418,12 @@ def _dataset_sensors(
             if (ds := _find_dataset(data))
             else {},
         ),
+        # Dataset available is redundant with used + usage%; no LTS.
         TrueNASSensorEntityDescription(
             key=f"dataset_{safe_id}_available",
             name=f"{dataset_id} available",
             native_unit_of_measurement=UnitOfInformation.GIBIBYTES,
             device_class=SensorDeviceClass.DATA_SIZE,
-            state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=2,
             icon="mdi:folder",
             entity_registry_enabled_default=enabled_default,

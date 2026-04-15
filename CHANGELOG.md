@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.5.0] - 2026-04-15
+
+Big release. Every API method was verified against the official TrueNAS SCALE 25 docs — several real bugs and the wrong signatures were caught.
+
+### Security
+
+- **`verify_ssl` now defaults to `True`** (was `False`). Users on self-signed certs must opt out explicitly.
+- **API key field is now a password input** (masked on screen).
+- Verified: API key is never logged, never placed in error messages, only sent over WSS to `auth.login_with_api_key`.
+
+### Fixed
+
+- **`disk.temperatures` had the wrong signature.** It requires a list of disk names; we were calling it with an empty args list so no temperatures were returned at all.
+- **`vm.stop` had the wrong signature.** The `force` flag goes inside an options dict (`{"force": bool}`), not as a bare positional argument.
+- **Pool `fragmentation`** — API returns it as a string (possibly with `%`); we were assuming int or dict. Now parsed robustly via a shared helper.
+
+### Changed / database
+
+- Removed long-term statistics (`state_class`) from sensors that are redundant with counterparts or don't change often:
+  - `load_avg_1/5/15` — only refresh with `system.info` (every 12h)
+  - `memory_free` — redundant with `memory_used` + `memory_usage_percent`
+  - `pool_{name}_free` — redundant with `used` + `usage`
+  - `dataset_{id}_available` — redundant with `used` + `usage`
+- Dropped unused `boottime` field from `SystemInfo`. Simplified `system.info` parsing (no more legacy `{"$date": ...}` handling).
+
 ## [0.4.1] - 2026-04-15
 
 ### Fixed

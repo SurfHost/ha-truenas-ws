@@ -105,8 +105,9 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
                 data.disks = await self._safe_fetch(
                     self.client.get_disks, data.disks
                 )
+                disk_names = [d.name for d in data.disks if d.name]
                 temps = await self._safe_fetch(
-                    self.client.get_disk_temperatures, {}
+                    lambda: self.client.get_disk_temperatures(disk_names), {}
                 )
                 if temps:
                     from dataclasses import replace
@@ -184,7 +185,7 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
         except TrueNASError as err:
             _LOGGER.debug(
                 "Failed to fetch %s, using cached data: %s",
-                fetch_fn.__name__,
+                getattr(fetch_fn, "__name__", "fetch"),
                 err,
             )
             return fallback

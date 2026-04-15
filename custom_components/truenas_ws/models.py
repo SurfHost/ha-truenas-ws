@@ -6,6 +6,22 @@ from dataclasses import dataclass, field
 from typing import Any, Self
 
 
+def _parse_fragmentation(value: Any) -> int:
+    """Parse a fragmentation value from TrueNAS.
+
+    The API may return an int, a string like ``"5"``/``"5%"`` or a legacy
+    dict ``{"value": "5"}``. Returns ``0`` if the value can't be parsed.
+    """
+    if isinstance(value, dict):
+        value = value.get("value", 0)
+    if value is None:
+        return 0
+    try:
+        return int(str(value).rstrip("%"))
+    except (ValueError, TypeError):
+        return 0
+
+
 @dataclass(frozen=True, slots=True)
 class SystemInfo:
     """System information from TrueNAS."""
@@ -20,38 +36,23 @@ class SystemInfo:
     load_avg_1: float
     load_avg_5: float
     load_avg_15: float
-    boottime: float
     timezone: str
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> Self:
         """Create from API response."""
-        # boottime can be a float, int, or dict like {"$date": "..."}
-        boottime_raw = data.get("boottime", 0)
-        if isinstance(boottime_raw, dict):
-            boottime = float(boottime_raw.get("$date", 0))
-        elif isinstance(boottime_raw, (int, float)):
-            boottime = float(boottime_raw)
-        else:
-            boottime = 0.0
-
-        # uptime_seconds can also be missing; calculate from boottime if needed
-        uptime = data.get("uptime_seconds", data.get("uptime", 0))
-        if isinstance(uptime, dict):
-            uptime = 0
-
+        loadavg = data.get("loadavg") or [0.0, 0.0, 0.0]
         return cls(
             hostname=data.get("hostname", ""),
             version=data.get("version", ""),
-            uptime_seconds=int(uptime),
-            cpu_model=data.get("model", data.get("cpu_model", "")),
+            uptime_seconds=int(data.get("uptime_seconds", 0)),
+            cpu_model=data.get("model", ""),
             cpu_cores=int(data.get("cores", 0)),
             physical_cores=int(data.get("physical_cores", 0)),
             memory_total_bytes=int(data.get("physmem", 0)),
-            load_avg_1=float(data.get("loadavg", [0, 0, 0])[0]),
-            load_avg_5=float(data.get("loadavg", [0, 0, 0])[1]),
-            load_avg_15=float(data.get("loadavg", [0, 0, 0])[2]),
-            boottime=boottime,
+            load_avg_1=float(loadavg[0]),
+            load_avg_5=float(loadavg[1]),
+            load_avg_15=float(loadavg[2]),
             timezone=data.get("timezone", "UTC"),
         )
 
@@ -210,9 +211,7 @@ class PoolInfo:
             size=int(data.get("size", 0)),
             allocated=int(data.get("allocated", 0)),
             free=int(data.get("free", 0)),
-            fragmentation=int(data.get("fragmentation", {}).get("value", 0))
-            if isinstance(data.get("fragmentation"), dict)
-            else int(data.get("fragmentation", 0)),
+            fragmentation=_parse_fragmentation(data.get("fragmentation")),
             is_decrypted=bool(data.get("is_decrypted", True)),
             scan_state=scan_state,
             scan_percentage=scan_pct,
@@ -239,19 +238,7 @@ class PoolInfo:
         allocated = int(data.get("allocated") or 0)
         free = int(data.get("free") or 0)
 
-        # Fragmentation can be int or dict
-        frag_raw = data.get("fragmentation", 0)
-        if isinstance(frag_raw, dict):
-            frag = int(frag_raw.get("value", 0))
-        elif frag_raw is not None:
-            # Could be a string like "5%" or an int
-            frag_str = str(frag_raw).rstrip("%")
-            try:
-                frag = int(frag_str)
-            except ValueError:
-                frag = 0
-        else:
-            frag = 0
+        frag = _parse_fragmentation(data.get("fragmentation"))
 
         status = data.get("status", "UNKNOWN")
         healthy = bool(data.get("healthy", status == "ONLINE"))

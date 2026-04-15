@@ -440,10 +440,19 @@ class TrueNASWebSocketClient:
         )
         return [DiskInfo.from_api(d) for d in result]
 
-    async def get_disk_temperatures(self) -> dict[str, int | None]:
-        """Get disk temperatures keyed by disk name."""
+    async def get_disk_temperatures(
+        self, disk_names: list[str]
+    ) -> dict[str, int | None]:
+        """Get disk temperatures keyed by disk name.
+
+        ``disk.temperatures`` requires a list of disk names — without it
+        the method rejects the call. Results are cached by TrueNAS for
+        up to 5 minutes.
+        """
+        if not disk_names:
+            return {}
         try:
-            result = await self._send_request("disk.temperatures", [])
+            result = await self._send_request("disk.temperatures", [disk_names])
         except (TrueNASAPIError, TrueNASTimeoutError):
             return {}
         return dict(result) if isinstance(result, dict) else {}
@@ -572,7 +581,7 @@ class TrueNASWebSocketClient:
 
     async def stop_vm(self, vm_id: int, force: bool = False) -> None:
         """Stop a virtual machine."""
-        await self._send_request("vm.stop", [vm_id, force])
+        await self._send_request("vm.stop", [vm_id, {"force": force}])
 
     async def start_app(self, app_name: str) -> None:
         """Start an application."""
