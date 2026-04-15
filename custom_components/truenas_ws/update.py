@@ -85,7 +85,10 @@ class TrueNASSystemUpdateEntity(TrueNASEntity, UpdateEntity):
 class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
     """Update entity for a TrueNAS application."""
 
+    # Use our own name directly (not "Apps <app> update") for cleaner display
+    _attr_has_entity_name = False
     _attr_supported_features = UpdateEntityFeature.INSTALL
+    _attr_icon = "mdi:application-cog"
 
     def __init__(
         self,
@@ -95,10 +98,10 @@ class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
         """Initialize the update entity."""
         description = UpdateEntityDescription(
             key=f"app_{app_name}_update",
-            name=f"{app_name} update",
         )
         super().__init__(coordinator, description, DEVICE_KEY_APPS)
         self._app_name = app_name
+        self._attr_name = app_name
 
     def _find_app(self) -> AppInfo | None:
         """Return the current app data from the coordinator, if present."""

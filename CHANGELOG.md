@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.10] - 2026-04-15
+
+### Changed
+
+- App update entities now display as `{app_name}` (e.g. `dozzle`) instead of `Apps {app_name} update`. The HA Updates UI and custom dashboards show the app name cleanly.
+
+### Fixed
+
+- System update detection: try `update.status` (TrueNAS SCALE 25+) before falling back to `update.check_available`. Raw responses are logged at WARNING level for diagnostics.
+
 ## [0.3.9] - 2026-04-15
 
 ### Changed

@@ -41,6 +41,47 @@ RECONNECT_MIN_DELAY = 5.0
 RECONNECT_MAX_DELAY = 300.0
 
 
+def _parse_update_status(result: Any) -> UpdateInfo | None:
+    """Parse ``update.status`` response into an ``UpdateInfo``.
+
+    TrueNAS SCALE 25+ wraps the update info in ``{"status": {"code": ..., "new_version": {...}}}``.
+    Returns ``None`` if the shape is unrecognised.
+    """
+    if not isinstance(result, dict):
+        return None
+
+    status_obj = result.get("status", result)
+    if not isinstance(status_obj, dict):
+        return None
+
+    code = str(status_obj.get("code", status_obj.get("status", ""))).upper()
+    new_ver = status_obj.get("new_version") or status_obj.get("version")
+
+    available = code in ("AVAILABLE", "UPDATE_AVAILABLE", "REBOOT_REQUIRED")
+    version: str | None = None
+    changelog: str | None = None
+
+    if isinstance(new_ver, dict):
+        version = new_ver.get("version") or new_ver.get("name")
+        changelog = new_ver.get("changelog") or new_ver.get("notes")
+    elif isinstance(new_ver, str):
+        version = new_ver
+
+    if not available and version:
+        available = True
+
+    if not available and code == "":
+        return None
+
+    return UpdateInfo(
+        available=available,
+        version=version,
+        changelog=changelog or result.get("changelog") or result.get("notes"),
+        current_version=result.get("current_version")
+        or status_obj.get("current_version"),
+    )
+
+
 class TrueNASWebSocketClient:
     """JSON-RPC 2.0 WebSocket client for TrueNAS."""
 
@@ -735,19 +776,30 @@ class TrueNASWebSocketClient:
         return [Alert.from_api(a) for a in result]
 
     async def check_update(self) -> UpdateInfo:
-        """Check for system updates."""
+        """Check for system updates.
+
+        Tries multiple API methods — TrueNAS SCALE versions return different
+        shapes for update status.
+        """
+        # 1. update.status (newer TrueNAS, returns status directly)
+        try:
+            result = await self._send_request("update.status")
+            _LOGGER.warning("update.status response: %s", result)
+            info = _parse_update_status(result)
+            if info is not None:
+                return info
+        except TrueNASAPIError as err:
+            _LOGGER.debug("update.status not available: %s", err)
+
+        # 2. update.check_available (older method)
         try:
             result = await self._send_request("update.check_available")
-            _LOGGER.debug("update.check_available response: %s", result)
+            _LOGGER.warning("update.check_available response: %s", result)
             if isinstance(result, dict):
                 return UpdateInfo.from_api(result)
-            _LOGGER.warning(
-                "update.check_available returned unexpected type %s: %s",
-                type(result).__name__,
-                result,
-            )
         except TrueNASAPIError as err:
-            _LOGGER.debug("Failed to check updates: %s", err)
+            _LOGGER.debug("update.check_available failed: %s", err)
+
         return UpdateInfo(
             available=False, version=None, changelog=None, current_version=None
         )
