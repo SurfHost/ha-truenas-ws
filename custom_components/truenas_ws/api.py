@@ -112,6 +112,7 @@ class TrueNASWebSocketClient:
         self._pending: dict[int, asyncio.Future[Any]] = {}
         self._listen_task: asyncio.Task[None] | None = None
         self._connected = False
+        self._realtime_logged = False  # one-shot diagnostic
 
     @property
     def connected(self) -> bool:
@@ -317,11 +318,21 @@ class TrueNASWebSocketClient:
         except (TrueNASAPIError, TrueNASTimeoutError):
             result = None
 
+        # One-shot diagnostic log so we can see what this particular TrueNAS
+        # returns. Only fires until we've logged one successful response.
+        if result is not None and not self._realtime_logged:
+            keys = list(result.keys()) if isinstance(result, dict) else type(result).__name__
+            _LOGGER.warning("reporting.realtime keys: %s | raw: %s", keys, result)
+            self._realtime_logged = True
+
         if isinstance(result, dict):
             cpu_raw = result.get("cpu", {})
             if isinstance(cpu_raw, dict):
                 if "usage" in cpu_raw:
                     cpu_usage = float(cpu_raw["usage"])
+                elif "average" in cpu_raw and isinstance(cpu_raw["average"], dict):
+                    # Newer SCALE: cpu.average = {usage: ..., user: ..., system: ...}
+                    cpu_usage = float(cpu_raw["average"].get("usage", 0))
                 else:
                     core_usages = [
                         float(v.get("usage", 0))
@@ -330,22 +341,38 @@ class TrueNASWebSocketClient:
                     ]
                     if core_usages:
                         cpu_usage = sum(core_usages) / len(core_usages)
+            elif isinstance(cpu_raw, (int, float)):
+                cpu_usage = float(cpu_raw)
+
+            virtual_mem = result.get("virtual_memory")
+            if isinstance(virtual_mem, dict):
+                # Newer SCALE: virtual_memory = {total, available, used, free, ...}
+                mem_total = int(virtual_mem.get("total", 0))
+                mem_used = int(virtual_mem.get("used", 0))
+                mem_free = int(
+                    virtual_mem.get("available", virtual_mem.get("free", 0))
+                )
 
             mem_raw = result.get("memory", {})
             if isinstance(mem_raw, dict):
-                mem_total = int(mem_raw.get("physmem", mem_raw.get("total", 0)))
+                if mem_total == 0:
+                    mem_total = int(mem_raw.get("physmem", mem_raw.get("total", 0)))
                 classes = mem_raw.get("classes")
                 if isinstance(classes, dict):
-                    mem_used = (
-                        int(classes.get("page_tables", 0))
-                        + int(classes.get("arc", 0))
-                        + int(classes.get("apps", 0))
-                    )
-                    mem_free = int(classes.get("free", 0))
+                    if mem_used == 0:
+                        mem_used = (
+                            int(classes.get("page_tables", 0))
+                            + int(classes.get("arc", 0))
+                            + int(classes.get("apps", 0))
+                        )
+                    if mem_free == 0:
+                        mem_free = int(classes.get("free", 0))
                     arc_size = int(classes.get("arc", 0))
                 else:
-                    mem_used = int(mem_raw.get("used", 0))
-                    mem_free = int(mem_raw.get("free", 0))
+                    if mem_used == 0:
+                        mem_used = int(mem_raw.get("used", 0))
+                    if mem_free == 0:
+                        mem_free = int(mem_raw.get("free", 0))
                     arc_size = int(mem_raw.get("arc_size", 0))
                     arc_max = int(mem_raw.get("arc_max", 0))
 
@@ -353,14 +380,23 @@ class TrueNASWebSocketClient:
             if isinstance(cpu_temp_raw, (int, float)):
                 cpu_temp = float(cpu_temp_raw)
 
-        # Fallback for total memory if not yet known
+        # Fallback for total memory via system.info
+        sysinfo: dict[str, Any] | None = None
         if mem_total == 0:
             try:
-                sysinfo = await self._send_request("system.info")
-                if isinstance(sysinfo, dict):
+                sysinfo_raw = await self._send_request("system.info")
+                if isinstance(sysinfo_raw, dict):
+                    sysinfo = sysinfo_raw
                     mem_total = int(sysinfo.get("physmem", 0))
             except (TrueNASAPIError, TrueNASTimeoutError):
                 pass
+
+        # Fallback CPU usage from load average if realtime gave us nothing
+        if cpu_usage == 0 and sysinfo is not None:
+            cores = int(sysinfo.get("cores", 1)) or 1
+            loadavg = sysinfo.get("loadavg") or []
+            if loadavg:
+                cpu_usage = min(round(float(loadavg[0]) / cores * 100, 1), 100.0)
 
         # Fill in derived values
         if mem_total > 0 and mem_used > 0 and mem_free == 0:

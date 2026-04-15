@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.1] - 2026-04-15
+
+### Changed
+
+- **App Updates dashboard now shows app names.** Each app's Update entity lives on a per-app device (named after the app), so the HA Updates list labels each row with the app name instead of a repeated "Apps". Status sensor and Power switch still live on the shared "Apps" device.
+- Load average sensors now round to 2 decimals at the value level (display precision wasn't enough).
+
+### Fixed
+
+- CPU usage / memory parsing supports additional `reporting.realtime` response shapes (`virtual_memory`, `cpu.average`). If realtime gives nothing for CPU, we now fall back to `loadavg[0] / cores * 100` from `system.info`.
+- Added one-shot diagnostic log of the first `reporting.realtime` response at WARNING level so we can see what the NAS is actually returning.
+
 ## [0.5.0] - 2026-04-15
 
 Big release. Every API method was verified against the official TrueNAS SCALE 25 docs — several real bugs and the wrong signatures were caught.

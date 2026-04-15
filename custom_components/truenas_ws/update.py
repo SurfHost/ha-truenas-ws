@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
-from .entity import DEVICE_KEY_APPS, DEVICE_KEY_SYSTEM, TrueNASEntity
+from .entity import DEVICE_KEY_SYSTEM, TrueNASEntity
 from .models import AppInfo
 
 _LOGGER = logging.getLogger(__name__)
@@ -83,10 +83,13 @@ class TrueNASSystemUpdateEntity(TrueNASEntity, UpdateEntity):
 
 
 class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
-    """Update entity for a TrueNAS application."""
+    """Update entity for a TrueNAS application.
 
-    # Use our own name directly (not "Apps <app> update") for cleaner display
-    _attr_has_entity_name = False
+    Each app's update entity sits under its own device (named after the
+    app) so the HA Updates dashboard can show the app name. Status and
+    Power entities stay under the shared "Apps" device.
+    """
+
     _attr_supported_features = UpdateEntityFeature.INSTALL
     _attr_icon = "mdi:application-cog"
 
@@ -98,10 +101,10 @@ class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
         """Initialize the update entity."""
         description = UpdateEntityDescription(
             key=f"app_{app_name}_update",
+            name="Update",
         )
-        super().__init__(coordinator, description, DEVICE_KEY_APPS)
+        super().__init__(coordinator, description, f"app_update:{app_name}")
         self._app_name = app_name
-        self._attr_name = app_name
 
     def _find_app(self) -> AppInfo | None:
         """Return the current app data from the coordinator, if present."""

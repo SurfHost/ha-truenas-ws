@@ -120,7 +120,7 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         suggested_display_precision=2,
         icon="mdi:gauge",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.system_info.load_avg_1
+        value_fn=lambda data: round(data.system_info.load_avg_1, 2)
         if data.system_info
         else None,
     ),
@@ -131,7 +131,7 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         suggested_display_precision=2,
         icon="mdi:gauge",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.system_info.load_avg_5
+        value_fn=lambda data: round(data.system_info.load_avg_5, 2)
         if data.system_info
         else None,
     ),
@@ -142,7 +142,7 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         suggested_display_precision=2,
         icon="mdi:gauge",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.system_info.load_avg_15
+        value_fn=lambda data: round(data.system_info.load_avg_15, 2)
         if data.system_info
         else None,
     ),
