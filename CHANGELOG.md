@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.9] - 2026-04-15
+
+### Changed
+
+- Reverted per-app device split from v0.3.8. All apps are again under a single **Apps** device, with each entity named after the app (e.g. `jellyfin update`, `sonarr update`) so they're easy to identify in the update UI.
+- Stale per-app device entities from v0.3.8 are auto-cleaned on startup.
+
 ## [0.3.8] - 2026-04-15
 
 ### Changed

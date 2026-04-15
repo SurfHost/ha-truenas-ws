@@ -220,17 +220,10 @@ async def async_setup_entry(
         for desc in _dataset_sensors(dataset.id, enabled_default=enabled):
             entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_STORAGE))
 
-    # App sensors — one device per app
+    # App sensors
     for app in coordinator.data.apps:
         for desc in _app_sensors(app.name):
-            entities.append(
-                TrueNASSensor(
-                    coordinator,
-                    desc,
-                    f"app:{app.name}",
-                    device_name=app.name,
-                )
-            )
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_APPS))
 
     # VM sensors
     for vm in coordinator.data.vms:
@@ -467,7 +460,7 @@ def _app_sensors(app_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
     return (
         TrueNASSensorEntityDescription(
             key=f"app_{app_name}_status",
-            name="Status",
+            name=f"{app_name}",
             icon="mdi:application",
             value_fn=lambda data, _a=app_name: a.state
             if (a := _find_app(data))

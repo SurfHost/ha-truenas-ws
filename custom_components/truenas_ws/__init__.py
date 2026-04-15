@@ -91,8 +91,8 @@ def _async_cleanup_stale_entities(
             or uid.startswith(f"{entry_id}_replication_")
             or uid.startswith(f"{entry_id}_snapshot_tasks_")
             or uid.startswith(f"{entry_id}_cloudsync_")
-            # Old shared "Apps" device entities (one device per app in v0.3.8)
-            or uid.startswith(f"{entry_id}_apps_")
+            # Per-app device entities (v0.3.8) — reverted to shared Apps device in v0.3.9
+            or uid.startswith(f"{entry_id}_app:")
         )
         if is_stale:
             _LOGGER.info("Removing stale entity: %s", eid)

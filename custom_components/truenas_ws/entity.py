@@ -28,19 +28,11 @@ class TrueNASEntity(CoordinatorEntity[TrueNASDataUpdateCoordinator]):
         coordinator: TrueNASDataUpdateCoordinator,
         description: EntityDescription,
         device_key: str,
-        *,
-        device_name: str | None = None,
     ) -> None:
-        """Initialize the entity.
-
-        ``device_key`` is a stable identifier for the device this entity
-        belongs to (e.g. ``system``, ``apps``, or ``app:plex``). ``device_name``
-        overrides the default device name when the device key is dynamic.
-        """
+        """Initialize the entity."""
         super().__init__(coordinator)
         self.entity_description = description
         self._device_key = device_key
-        self._device_name_override = device_name
         self._attr_unique_id = (
             f"{coordinator.config_entry.entry_id}_{device_key}_{description.key}"
         )
@@ -51,17 +43,6 @@ class TrueNASEntity(CoordinatorEntity[TrueNASDataUpdateCoordinator]):
         entry_id = self.coordinator.config_entry.entry_id
         sys_info = self.coordinator.data.system_info if self.coordinator.data else None
         hostname = sys_info.hostname if sys_info else self.coordinator.config_entry.title
-
-        # Per-app devices (device_key format: "app:{app_name}")
-        if self._device_key.startswith("app:"):
-            app_name = self._device_key.split(":", 1)[1]
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{entry_id}_app_{app_name}")},
-                name=self._device_name_override or app_name,
-                manufacturer="iXsystems",
-                model="TrueNAS App",
-                via_device=(DOMAIN, f"{entry_id}_apps"),
-            )
 
         if self._device_key == DEVICE_KEY_SYSTEM:
             return DeviceInfo(

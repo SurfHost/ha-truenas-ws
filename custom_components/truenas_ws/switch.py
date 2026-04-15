@@ -12,7 +12,7 @@ from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
-from .entity import DEVICE_KEY_SERVICES, DEVICE_KEY_VMS, TrueNASEntity
+from .entity import DEVICE_KEY_APPS, DEVICE_KEY_SERVICES, DEVICE_KEY_VMS, TrueNASEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -154,18 +154,13 @@ class TrueNASAppSwitch(TrueNASEntity, SwitchEntity):
             key=f"app_{app_name}_power",
             translation_key="app_power",
         )
-        super().__init__(
-            coordinator,
-            description,
-            f"app:{app_name}",
-            device_name=app_name,
-        )
+        super().__init__(coordinator, description, DEVICE_KEY_APPS)
         self._app_name = app_name
 
     @property
     def name(self) -> str:
         """Return the name of the switch."""
-        return "Power"
+        return f"{self._app_name}"
 
     @property
     def is_on(self) -> bool:
