@@ -75,7 +75,7 @@ After setup, you can configure:
 
 ## Requirements
 
-- TrueNAS SCALE with WebSocket API support
+- **TrueNAS SCALE 25.04 or newer** (uses the JSON-RPC 2.0 API at `/api/current`)
 - Home Assistant 2024.3.0 or newer
 - A TrueNAS API key
 

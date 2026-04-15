@@ -70,32 +70,21 @@ async def async_unload_entry(
 def _async_cleanup_stale_entities(
     hass: HomeAssistant, entry: TrueNASConfigEntry
 ) -> None:
-    """Remove entities that are no longer created by the integration."""
+    """Remove entities from reorganised features that no longer exist."""
     ent_reg = er.async_get(hass)
-    entries = er.async_entries_for_config_entry(ent_reg, entry.entry_id)
-    for entity in entries:
+    entry_id = entry.entry_id
+    stale_prefixes = (
+        # Per-type task devices (merged into Tasks)
+        f"{entry_id}_replication_",
+        f"{entry_id}_snapshot_tasks_",
+        f"{entry_id}_cloudsync_",
+        # Per-app device entities (reverted to shared Apps device)
+        f"{entry_id}_app:",
+    )
+    for entity in er.async_entries_for_config_entry(ent_reg, entry_id):
         uid = entity.unique_id or ""
-        eid = entity.entity_id or ""
-        # Remove stale entities from removed/reorganized features
-        # Old unique_id format: {entry_id}_{device_key}_{sensor_key}
-        entry_id = entry.entry_id
-        is_stale = (
-            # Network per-interface sensors (removed in v0.2.0)
-            ("_net_" in uid and ("_received" in uid or "_sent" in uid))
-            or ("_received" in eid and "eno" in eid)
-            or ("_sent" in eid and "eno" in eid)
-            # ARC hit ratio sensor (removed in v0.2.9)
-            or "arc_hit_ratio" in uid
-            # Old per-type task devices (merged into Tasks in v0.3.0)
-            # Match old device keys: {entry}_replication_, {entry}_snapshot_tasks_, {entry}_cloudsync_
-            or uid.startswith(f"{entry_id}_replication_")
-            or uid.startswith(f"{entry_id}_snapshot_tasks_")
-            or uid.startswith(f"{entry_id}_cloudsync_")
-            # Per-app device entities (v0.3.8) — reverted to shared Apps device in v0.3.9
-            or uid.startswith(f"{entry_id}_app:")
-        )
-        if is_stale:
-            _LOGGER.info("Removing stale entity: %s", eid)
+        if uid.startswith(stale_prefixes) or "arc_hit_ratio" in uid:
+            _LOGGER.info("Removing stale entity: %s", entity.entity_id)
             ent_reg.async_remove(entity.entity_id)
 
 

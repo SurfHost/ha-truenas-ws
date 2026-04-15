@@ -420,22 +420,19 @@ class AppInfo:
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> Self:
         """Create from API response."""
-        metadata = data.get("metadata", data.get("chart_metadata", {}))
-        # Latest version may be in several places depending on TrueNAS version
-        latest = (
-            data.get("latest_version")
-            or data.get("upgrade_version")
-            or (metadata.get("latest_version") if isinstance(metadata, dict) else None)
-        )
+        metadata = data.get("metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
         return cls(
             name=data.get("name", ""),
             id=data.get("id", data.get("name", "")),
             state=data.get("state", "UNKNOWN"),
             version=data.get("version", ""),
             human_version=data.get("human_version", data.get("version", "")),
-            latest_version=latest,
+            latest_version=data.get("latest_version")
+            or metadata.get("latest_version"),
             upgrade_available=bool(data.get("upgrade_available", False)),
-            metadata=metadata if isinstance(metadata, dict) else {},
+            metadata=metadata,
         )
 
 
@@ -657,22 +654,6 @@ class UpdateInfo:
     version: str | None
     changelog: str | None
     current_version: str | None
-
-    @classmethod
-    def from_api(cls, data: dict[str, Any]) -> Self:
-        """Create from API response.
-
-        Modern TrueNAS returns ``status`` (e.g. ``AVAILABLE``/``UNAVAILABLE``).
-        Older versions returned a boolean ``available`` field.
-        """
-        status = str(data.get("status", "")).upper()
-        available = status == "AVAILABLE" or bool(data.get("available", False))
-        return cls(
-            available=available,
-            version=data.get("version"),
-            changelog=data.get("changelog") or data.get("notes"),
-            current_version=data.get("current", data.get("installed")),
-        )
 
 
 @dataclass(slots=True)

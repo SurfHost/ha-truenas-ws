@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0] - 2026-04-15
+
+### Changed
+
+- **Dropped backward compatibility with pre-SCALE-25 TrueNAS.** The integration now targets TrueNAS SCALE 25+ only.
+- Removed legacy DDP WebSocket protocol handling (`/websocket` endpoint) — only `/api/current` (JSON-RPC 2.0) is used.
+- Removed `chart.release.*` fallbacks — uses `app.query`, `app.start`, `app.stop`, `app.upgrade` directly.
+- Removed `update.check_available` fallback — uses `update.status` only.
+- Removed FreeBSD/CORE memory-reporting fallbacks.
+- Simplified `UpdateInfo`, `AppInfo` parsers to the modern response shapes.
+- Simplified stale-entity cleanup: compact prefix check instead of per-version patterns.
+- The WebSocket client no longer carries the unused `_pending_str`, `_is_legacy`, collection-callback machinery.
+
 ## [0.3.10] - 2026-04-15
 
 ### Changed
