@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.2] - 2026-04-15
+
+### Fixed
+
+- CPU usage and memory usage now populate on SCALE builds where `reporting.realtime` doesn't expose `cpu.usage` or memory fields.
+  - `system.info` is fetched every poll cycle and used to fill total memory and a loadavg-derived CPU usage.
+  - `reporting.get_data(memory)` fills `mem_used` when realtime doesn't provide it.
+
+### Removed
+
+- One-shot `reporting.realtime` diagnostic log.
+
 ## [0.5.1] - 2026-04-15
 
 ### Changed
