@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.3] - 2026-04-15
+
+### Changed
+
+- App update entities are back under the shared **Apps** device. The per-app update devices introduced in v0.5.1 are removed.
+- App update entity uses `has_entity_name = False` with an explicit name (`<app> update`), so the HA Updates dashboard shows the app name without the `Apps` device prefix.
+- Stale per-app update devices from v0.5.1 are auto-removed on startup.
+
 ## [0.5.2] - 2026-04-15
 
 ### Fixed

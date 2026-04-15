@@ -80,20 +80,12 @@ def _async_cleanup_stale_entities(
         f"{entry_id}_cloudsync_",
         # All-in-one per-app device (reverted in v0.3.9)
         f"{entry_id}_app:",
+        # Per-app update device (reverted in v0.5.3 — back under shared Apps)
+        f"{entry_id}_app_update:",
     )
-    # App update entities moved from the shared Apps device to per-app
-    # update devices in v0.5.1 — match the old unique_id exactly.
     for entity in er.async_entries_for_config_entry(ent_reg, entry_id):
         uid = entity.unique_id or ""
-        is_stale = (
-            uid.startswith(stale_prefixes)
-            or "arc_hit_ratio" in uid
-            or (
-                uid.startswith(f"{entry_id}_apps_app_")
-                and uid.endswith("_update")
-            )
-        )
-        if is_stale:
+        if uid.startswith(stale_prefixes) or "arc_hit_ratio" in uid:
             _LOGGER.info("Removing stale entity: %s", entity.entity_id)
             ent_reg.async_remove(entity.entity_id)
 

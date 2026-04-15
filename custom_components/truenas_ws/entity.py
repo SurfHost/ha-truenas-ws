@@ -71,20 +71,6 @@ class TrueNASEntity(CoordinatorEntity[TrueNASDataUpdateCoordinator]):
                 via_device=(DOMAIN, f"{entry_id}_system"),
             )
 
-        # Per-app update devices — key format: "app_update:<name>"
-        # Only the Update entity uses these so each app's update can show
-        # its own name in the HA Updates dashboard. Status sensor and Power
-        # switch stay under the shared "Apps" device.
-        if self._device_key.startswith("app_update:"):
-            app_name = self._device_key.split(":", 1)[1]
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{entry_id}_app_update_{app_name}")},
-                name=app_name,
-                manufacturer="iXsystems",
-                model="TrueNAS App",
-                via_device=(DOMAIN, f"{entry_id}_apps"),
-            )
-
         if self._device_key == DEVICE_KEY_SERVICES:
             return DeviceInfo(
                 identifiers={(DOMAIN, f"{entry_id}_services")},
