@@ -413,6 +413,7 @@ class AppInfo:
     state: str
     version: str
     human_version: str
+    latest_version: str | None
     upgrade_available: bool
     metadata: dict[str, Any]
 
@@ -420,12 +421,19 @@ class AppInfo:
     def from_api(cls, data: dict[str, Any]) -> Self:
         """Create from API response."""
         metadata = data.get("metadata", data.get("chart_metadata", {}))
+        # Latest version may be in several places depending on TrueNAS version
+        latest = (
+            data.get("latest_version")
+            or data.get("upgrade_version")
+            or (metadata.get("latest_version") if isinstance(metadata, dict) else None)
+        )
         return cls(
             name=data.get("name", ""),
             id=data.get("id", data.get("name", "")),
             state=data.get("state", "UNKNOWN"),
             version=data.get("version", ""),
             human_version=data.get("human_version", data.get("version", "")),
+            latest_version=latest,
             upgrade_available=bool(data.get("upgrade_available", False)),
             metadata=metadata if isinstance(metadata, dict) else {},
         )
@@ -652,11 +660,17 @@ class UpdateInfo:
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> Self:
-        """Create from API response."""
+        """Create from API response.
+
+        Modern TrueNAS returns ``status`` (e.g. ``AVAILABLE``/``UNAVAILABLE``).
+        Older versions returned a boolean ``available`` field.
+        """
+        status = str(data.get("status", "")).upper()
+        available = status == "AVAILABLE" or bool(data.get("available", False))
         return cls(
-            available=bool(data.get("available", False)),
+            available=available,
             version=data.get("version"),
-            changelog=data.get("changelog"),
+            changelog=data.get("changelog") or data.get("notes"),
             current_version=data.get("current", data.get("installed")),
         )
 

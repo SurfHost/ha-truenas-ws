@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
-from .entity import DEVICE_KEY_SYSTEM, TrueNASEntity
+from .entity import DEVICE_KEY_APPS, DEVICE_KEY_SYSTEM, TrueNASEntity
 
 
 async def async_setup_entry(
@@ -19,12 +19,17 @@ async def async_setup_entry(
     entry: TrueNASConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up TrueNAS update entity."""
+    """Set up TrueNAS update entities."""
     coordinator = entry.runtime_data
-    async_add_entities([TrueNASUpdateEntity(coordinator)])
+    entities: list[UpdateEntity] = [TrueNASSystemUpdateEntity(coordinator)]
+
+    for app in coordinator.data.apps:
+        entities.append(TrueNASAppUpdateEntity(coordinator, app.name))
+
+    async_add_entities(entities)
 
 
-class TrueNASUpdateEntity(TrueNASEntity, UpdateEntity):
+class TrueNASSystemUpdateEntity(TrueNASEntity, UpdateEntity):
     """Update entity for TrueNAS system updates."""
 
     _attr_supported_features = UpdateEntityFeature.RELEASE_NOTES
@@ -58,3 +63,45 @@ class TrueNASUpdateEntity(TrueNASEntity, UpdateEntity):
         if update and update.changelog:
             return update.changelog
         return None
+
+
+class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
+    """Update entity for a TrueNAS application."""
+
+    def __init__(
+        self,
+        coordinator: TrueNASDataUpdateCoordinator,
+        app_name: str,
+    ) -> None:
+        """Initialize the update entity."""
+        description = UpdateEntityDescription(
+            key=f"app_{app_name}_update",
+            name=f"{app_name} update",
+        )
+        super().__init__(coordinator, description, DEVICE_KEY_APPS)
+        self._app_name = app_name
+
+    def _find_app(self):  # type: ignore[no-untyped-def]
+        """Return the current app data from the coordinator, if present."""
+        return next(
+            (a for a in self.coordinator.data.apps if a.name == self._app_name),
+            None,
+        )
+
+    @property
+    def installed_version(self) -> str | None:
+        """Return the installed version."""
+        app = self._find_app()
+        if app is None:
+            return None
+        return app.human_version or app.version or None
+
+    @property
+    def latest_version(self) -> str | None:
+        """Return the latest version."""
+        app = self._find_app()
+        if app is None:
+            return None
+        if app.upgrade_available:
+            return app.latest_version or "available"
+        return self.installed_version

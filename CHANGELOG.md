@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.6] - 2026-04-15
+
+### Fixed
+
+- System update entity now correctly detects available updates (modern TrueNAS returns `status` field instead of boolean `available`)
+- Added update entities per application — available app updates now show in the HA update UI
+
 ## [0.3.5] - 2026-04-13
 
 ### Changed
