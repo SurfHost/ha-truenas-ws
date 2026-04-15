@@ -738,12 +738,19 @@ class TrueNASWebSocketClient:
         """Check for system updates."""
         try:
             result = await self._send_request("update.check_available")
-            return UpdateInfo.from_api(result)
+            _LOGGER.debug("update.check_available response: %s", result)
+            if isinstance(result, dict):
+                return UpdateInfo.from_api(result)
+            _LOGGER.warning(
+                "update.check_available returned unexpected type %s: %s",
+                type(result).__name__,
+                result,
+            )
         except TrueNASAPIError as err:
             _LOGGER.debug("Failed to check updates: %s", err)
-            return UpdateInfo(
-                available=False, version=None, changelog=None, current_version=None
-            )
+        return UpdateInfo(
+            available=False, version=None, changelog=None, current_version=None
+        )
 
     # ── Action methods ──────────────────────────────────────────
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.8] - 2026-04-15
+
+### Changed
+
+- **Each app is now its own device** named after the app (previously all apps were grouped under a single "Apps" device, making them indistinguishable). Each app device contains its Status sensor, Power switch, and Update entity. Old shared-device entities are auto-cleaned on startup.
+
+### Fixed
+
+- Added diagnostic logging for `update.check_available` so we can see what the API actually returns when a system update is pending but not detected
+
 ## [0.3.7] - 2026-04-15
 
 ### Added

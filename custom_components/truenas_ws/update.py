@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
-from .entity import DEVICE_KEY_APPS, DEVICE_KEY_SYSTEM, TrueNASEntity
+from .entity import DEVICE_KEY_SYSTEM, TrueNASEntity
 from .models import AppInfo
 
 _LOGGER = logging.getLogger(__name__)
@@ -95,9 +95,14 @@ class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
         """Initialize the update entity."""
         description = UpdateEntityDescription(
             key=f"app_{app_name}_update",
-            name=f"{app_name} update",
+            name="Update",
         )
-        super().__init__(coordinator, description, DEVICE_KEY_APPS)
+        super().__init__(
+            coordinator,
+            description,
+            f"app:{app_name}",
+            device_name=app_name,
+        )
         self._app_name = app_name
 
     def _find_app(self) -> AppInfo | None:
