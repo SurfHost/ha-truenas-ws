@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.5] - 2026-04-21
+
+### Added
+
+- **Install progress indicator** for both system and app updates. HA now shows a spinner while the update is in progress, matching the ESPHome-style UX.
+  - **System update:** spinner appears on press, clears automatically when the coordinator reconnects after the post-install reboot and the installed version matches the target.
+  - **App update:** spinner appears on press, clears when `app.query` reports `upgrade_available = false` on the next coordinator refresh.
+  - On error, the spinner clears immediately.
+
 ## [0.5.4] - 2026-04-15
 
 ### Fixed

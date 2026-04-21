@@ -38,7 +38,9 @@ class TrueNASSystemUpdateEntity(TrueNASEntity, UpdateEntity):
     """Update entity for TrueNAS system updates."""
 
     _attr_supported_features = (
-        UpdateEntityFeature.INSTALL | UpdateEntityFeature.RELEASE_NOTES
+        UpdateEntityFeature.INSTALL
+        | UpdateEntityFeature.PROGRESS
+        | UpdateEntityFeature.RELEASE_NOTES
     )
 
     def __init__(self, coordinator: TrueNASDataUpdateCoordinator) -> None:
@@ -48,6 +50,7 @@ class TrueNASSystemUpdateEntity(TrueNASEntity, UpdateEntity):
             name="System update",
         )
         super().__init__(coordinator, description, DEVICE_KEY_SYSTEM)
+        self._installing = False
 
     @property
     def installed_version(self) -> str | None:
@@ -69,6 +72,17 @@ class TrueNASSystemUpdateEntity(TrueNASEntity, UpdateEntity):
         ):
             return update.version
         return installed
+
+    @property
+    def in_progress(self) -> bool | int:
+        """Return True while the system update is being installed."""
+        if self._installing:
+            # Auto-clear when the installed version catches up
+            if self.installed_version == self.latest_version:
+                self._installing = False
+                return False
+            return True
+        return False
 
     @property
     def extra_state_attributes(self) -> dict[str, str] | None:
@@ -97,8 +111,17 @@ class TrueNASSystemUpdateEntity(TrueNASEntity, UpdateEntity):
         **kwargs: object,
     ) -> None:
         """Install the pending system update."""
-        _LOGGER.warning("Installing TrueNAS system update (will reboot)")
-        await self.coordinator.client.install_system_update()
+        self._installing = True
+        self.async_write_ha_state()
+        try:
+            await self.coordinator.client.install_system_update()
+        except Exception:
+            self._installing = False
+            self.async_write_ha_state()
+            raise
+        # _installing stays True — cleared automatically when the
+        # coordinator reconnects after the reboot and installed_version
+        # matches latest_version.
 
 
 class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
@@ -110,7 +133,9 @@ class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
     """
 
     _attr_has_entity_name = False
-    _attr_supported_features = UpdateEntityFeature.INSTALL
+    _attr_supported_features = (
+        UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
+    )
     _attr_icon = "mdi:application-cog"
 
     def __init__(
@@ -125,6 +150,7 @@ class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
         super().__init__(coordinator, description, DEVICE_KEY_APPS)
         self._app_name = app_name
         self._attr_name = f"{app_name} update"
+        self._installing = False
 
     def _find_app(self) -> AppInfo | None:
         """Return the current app data from the coordinator, if present."""
@@ -151,6 +177,18 @@ class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
             return app.latest_version or "available"
         return self.installed_version
 
+    @property
+    def in_progress(self) -> bool | int:
+        """Return True while the app is being upgraded."""
+        if self._installing:
+            # Auto-clear once TrueNAS reports upgrade_available = False
+            app = self._find_app()
+            if app is not None and not app.upgrade_available:
+                self._installing = False
+                return False
+            return True
+        return False
+
     async def async_install(
         self,
         version: str | None,
@@ -158,6 +196,14 @@ class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
         **kwargs: object,
     ) -> None:
         """Upgrade the application to the latest version."""
-        _LOGGER.info("Upgrading TrueNAS app %s", self._app_name)
-        await self.coordinator.client.upgrade_app(self._app_name)
+        self._installing = True
+        self.async_write_ha_state()
+        try:
+            await self.coordinator.client.upgrade_app(self._app_name)
+        except Exception:
+            self._installing = False
+            self.async_write_ha_state()
+            raise
+        # Trigger a refresh so the spinner clears when app.query reports
+        # upgrade_available = False.
         await self.coordinator.async_request_refresh()
