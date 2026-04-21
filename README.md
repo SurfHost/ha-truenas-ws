@@ -3,9 +3,7 @@
 [![Validate](https://github.com/SurfHost/ha-truenas-ws/actions/workflows/validate.yml/badge.svg)](https://github.com/SurfHost/ha-truenas-ws/actions/workflows/validate.yml)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
-Custom Home Assistant integration for TrueNAS SCALE using the modern **JSON-RPC 2.0 WebSocket API**.
-
-> **⚠️ TrueNAS 26 — REST API is removed.** TrueNAS 26 (release notes) removes the REST API entirely; all integrations must use the WebSocket API. This integration uses the WebSocket API and will continue to work after upgrading to TrueNAS 26.
+Custom Home Assistant integration for TrueNAS SCALE using the **JSON-RPC 2.0 WebSocket API**. Fully compatible with TrueNAS SCALE 25 and 26+.
 
 ## Features
 
