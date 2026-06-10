@@ -26,6 +26,10 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.uv]
+# HA custom component — nothing to build/install as a wheel
+package = false
+
 [tool.ruff]
 target-version = "py313"
 line-length = 100

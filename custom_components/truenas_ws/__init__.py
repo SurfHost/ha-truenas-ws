@@ -30,13 +30,13 @@ async def async_setup_entry(
     """Set up TrueNAS from a config entry."""
     session = async_get_clientsession(
         hass,
-        verify_ssl=entry.data.get(CONF_VERIFY_SSL, False),
+        verify_ssl=entry.data.get(CONF_VERIFY_SSL, True),
     )
     client = TrueNASWebSocketClient(
         host=entry.data[CONF_HOST],
         api_key=entry.data[CONF_API_KEY],
         session=session,
-        verify_ssl=entry.data.get(CONF_VERIFY_SSL, False),
+        verify_ssl=entry.data.get(CONF_VERIFY_SSL, True),
     )
 
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)

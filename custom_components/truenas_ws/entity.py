@@ -21,6 +21,10 @@ DEVICE_KEY_TASKS = "tasks"
 class TrueNASEntity(CoordinatorEntity[TrueNASDataUpdateCoordinator]):
     """Base entity for TrueNAS."""
 
+    # The homeassistant-stubs declare this as Incomplete (Any); re-declare
+    # so subclasses get proper typing on self.coordinator.
+    coordinator: TrueNASDataUpdateCoordinator
+
     _attr_has_entity_name = True
 
     def __init__(

@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.6.0] - 2026-06-10
+
+### Security
+
+- `verify_ssl` now defaults to **enabled** everywhere. Previously the config
+  schema defaulted to verify, but every runtime read fell back to *disabled*
+  when the key was missing.
+
+### Added
+
+- **Real disk SMART health.** The per-disk problem sensors were placeholders
+  that always reported healthy. They now reflect the most recent finished
+  SMART self-test result (`smart.test.results`), fetched on the same 5-minute
+  tier as disk data. If the endpoint is unavailable the sensors show unknown.
+
+### Fixed
+
+- A timeout or connection error during WebSocket **authentication** no longer
+  leaks the connection and listener task; it is now cleaned up and surfaced
+  as a connection error (with `ws://` fallback still attempted).
+- Concurrent `connect()` calls are serialized with a lock, preventing
+  duplicate listener tasks.
+- The re-authentication dialog showed a literal `{title}` instead of the
+  system name.
+- Snapshot names from the snapshot button now use the Home Assistant
+  timezone utilities instead of a naive `datetime.now()`.
+- Reboot/Shutdown buttons use their translation keys instead of hardcoded
+  English name overrides.
+
+### Changed
+
+- The **Active alerts** sensor no longer stores the full alert list in its
+  attributes (unbounded recorder growth). Attributes now hold per-level
+  counts plus the 5 most recent alerts, truncated to 200 characters.
+
+### Removed
+
+- Dead `arc_hit_ratio` field from `SystemStats` (entities were already
+  removed in an earlier release; registry cleanup is retained).
+
+### Development
+
+- The codebase now passes `ruff check` and strict `mypy` with zero issues
+  (typed `_safe_fetch`, typed `self.coordinator` on the base entity,
+  removed redundant lambda default-arg tricks, fixed `in_progress` return
+  types, defensive numeric parsing in the API client).
+- `pyproject.toml`: marked the project as non-packaged (`tool.uv.package =
+  false`) so `uv sync`/`uv run` no longer try to build a wheel.
+
 ## [0.5.5] - 2026-04-21
 
 ### Added

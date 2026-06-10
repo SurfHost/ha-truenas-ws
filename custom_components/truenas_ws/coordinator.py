@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
-from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -114,7 +114,7 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
                     self.client.get_disks, data.disks
                 )
                 disk_names = [d.name for d in data.disks if d.name]
-                temps = await self._safe_fetch(
+                temps: dict[str, int | None] = await self._safe_fetch(
                     lambda: self.client.get_disk_temperatures(disk_names), {}
                 )
                 if temps:
@@ -129,6 +129,10 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
                             updated_disks.append(disk)
                     data.disks = updated_disks
 
+                data.disk_smart = await self._safe_fetch(
+                    lambda: self.client.get_disk_smart(disk_names),
+                    data.disk_smart,
+                )
                 data.pools = await self._safe_fetch(
                     self.client.get_pools, data.pools
                 )
@@ -180,11 +184,11 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
 
         return data
 
-    async def _safe_fetch(
+    async def _safe_fetch[T](
         self,
-        fetch_fn: Any,
-        fallback: Any,
-    ) -> Any:
+        fetch_fn: Callable[[], Awaitable[T]],
+        fallback: T,
+    ) -> T:
         """Fetch data, returning fallback on non-critical error."""
         try:
             return await fetch_fn()

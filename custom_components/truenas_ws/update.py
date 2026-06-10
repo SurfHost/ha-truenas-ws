@@ -74,7 +74,7 @@ class TrueNASSystemUpdateEntity(TrueNASEntity, UpdateEntity):
         return installed
 
     @property
-    def in_progress(self) -> bool | int:
+    def in_progress(self) -> bool:
         """Return True while the system update is being installed."""
         if self._installing:
             # Auto-clear when the installed version catches up
@@ -178,7 +178,7 @@ class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
         return self.installed_version
 
     @property
-    def in_progress(self) -> bool | int:
+    def in_progress(self) -> bool:
         """Return True while the app is being upgraded."""
         if self._installing:
             # Auto-clear once TrueNAS reports upgrade_available = False

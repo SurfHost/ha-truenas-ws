@@ -7,7 +7,6 @@ from typing import Any
 
 import aiohttp
 import voluptuous as vol
-
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_HOST, CONF_SCAN_INTERVAL, CONF_VERIFY_SSL
 from homeassistant.core import callback
@@ -52,13 +51,13 @@ class TrueNASConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             session = async_get_clientsession(
                 self.hass,
-                verify_ssl=user_input.get(CONF_VERIFY_SSL, False),
+                verify_ssl=user_input.get(CONF_VERIFY_SSL, True),
             )
             client = TrueNASWebSocketClient(
                 host=user_input[CONF_HOST],
                 api_key=user_input[CONF_API_KEY],
                 session=session,
-                verify_ssl=user_input.get(CONF_VERIFY_SSL, False),
+                verify_ssl=user_input.get(CONF_VERIFY_SSL, True),
             )
 
             try:
@@ -99,18 +98,18 @@ class TrueNASConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle reauth confirmation."""
         errors: dict[str, str] = {}
+        reauth_entry = self._get_reauth_entry()
 
         if user_input is not None:
-            reauth_entry = self._get_reauth_entry()
             session = async_get_clientsession(
                 self.hass,
-                verify_ssl=reauth_entry.data.get(CONF_VERIFY_SSL, False),
+                verify_ssl=reauth_entry.data.get(CONF_VERIFY_SSL, True),
             )
             client = TrueNASWebSocketClient(
                 host=reauth_entry.data[CONF_HOST],
                 api_key=user_input[CONF_API_KEY],
                 session=session,
-                verify_ssl=reauth_entry.data.get(CONF_VERIFY_SSL, False),
+                verify_ssl=reauth_entry.data.get(CONF_VERIFY_SSL, True),
             )
 
             try:
@@ -135,6 +134,7 @@ class TrueNASConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {vol.Required(CONF_API_KEY): _API_KEY_SELECTOR}
             ),
+            description_placeholders={"title": reauth_entry.title},
             errors=errors,
         )
 

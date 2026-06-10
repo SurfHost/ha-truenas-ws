@@ -67,7 +67,6 @@ class SystemStats:
     memory_free_bytes: int
     arc_size: int
     arc_max: int
-    arc_hit_ratio: float
     cpu_temperature: float | None
 
     @classmethod
@@ -112,7 +111,6 @@ class SystemStats:
             memory_free_bytes=mem_free,
             arc_size=arc_size,
             arc_max=arc_max,
-            arc_hit_ratio=0.0,
             cpu_temperature=cpu_temp,
         )
 
@@ -154,15 +152,6 @@ class DiskSmartInfo:
     disk_name: str
     passed: bool | None
     temperature: int | None
-
-    @classmethod
-    def from_api(cls, disk_name: str, data: dict[str, Any]) -> Self:
-        """Create from API response."""
-        return cls(
-            disk_name=disk_name,
-            passed=data.get("passed"),
-            temperature=data.get("temperature"),
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,6 +282,8 @@ class DatasetInfo:
                 raw = prop.get("rawvalue", prop.get("value", default))
             else:
                 raw = prop if prop is not None else default
+            if raw is None:
+                return default
             try:
                 return int(raw)
             except (ValueError, TypeError):

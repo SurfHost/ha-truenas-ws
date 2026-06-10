@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
 from .entity import DEVICE_KEY_STORAGE, DEVICE_KEY_SYSTEM, TrueNASEntity
@@ -52,11 +51,6 @@ class TrueNASRebootButton(TrueNASEntity, ButtonEntity):
         )
         super().__init__(coordinator, description, DEVICE_KEY_SYSTEM)
 
-    @property
-    def name(self) -> str:
-        """Return the name."""
-        return "Reboot"
-
     async def async_press(self) -> None:
         """Reboot the system."""
         await self.coordinator.client.reboot()
@@ -75,11 +69,6 @@ class TrueNASShutdownButton(TrueNASEntity, ButtonEntity):
             translation_key="system_shutdown",
         )
         super().__init__(coordinator, description, DEVICE_KEY_SYSTEM)
-
-    @property
-    def name(self) -> str:
-        """Return the name."""
-        return "Shutdown"
 
     async def async_press(self) -> None:
         """Shutdown the system."""
@@ -113,6 +102,6 @@ class TrueNASSnapshotButton(TrueNASEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Create a snapshot."""
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        timestamp = dt_util.now().strftime("%Y%m%d-%H%M%S")
         name = f"ha-snapshot-{timestamp}"
         await self.coordinator.client.create_snapshot(self._dataset_id, name)

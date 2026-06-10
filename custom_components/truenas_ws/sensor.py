@@ -23,7 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
-from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
+from .coordinator import TrueNASConfigEntry
 from .entity import (
     DEVICE_KEY_APPS,
     DEVICE_KEY_STORAGE,
@@ -41,6 +41,20 @@ class TrueNASSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[TrueNASData], StateType | datetime] = lambda _: None
     extra_attrs_fn: Callable[[TrueNASData], dict[str, Any]] | None = None
+
+
+def _alert_attrs(data: TrueNASData) -> dict[str, Any]:
+    """Summarize active alerts without bloating the recorder database."""
+    active = [a for a in data.alerts if not a.dismissed]
+    return {
+        "critical": sum(a.level == "CRITICAL" for a in active),
+        "error": sum(a.level == "ERROR" for a in active),
+        "warning": sum(a.level == "WARNING" for a in active),
+        "info": sum(a.level == "INFO" for a in active),
+        "latest": [
+            {"level": a.level, "message": a.message[:200]} for a in active[:5]
+        ],
+    }
 
 
 # ── System sensors ────────────────────────────────────────────────
@@ -179,13 +193,7 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         icon="mdi:alert-circle",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: len([a for a in data.alerts if not a.dismissed]),
-        extra_attrs_fn=lambda data: {
-            "alerts": [
-                {"level": a.level, "message": a.message}
-                for a in data.alerts
-                if not a.dismissed
-            ]
-        },
+        extra_attrs_fn=_alert_attrs,
     ),
 )
 
@@ -231,20 +239,20 @@ async def async_setup_entry(
             entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_VMS))
 
     # Task sensors — all grouped under Tasks device
-    for task in coordinator.data.replication_tasks:
-        for desc in _replication_sensors(task.id, task.name):
+    for repl_task in coordinator.data.replication_tasks:
+        for desc in _replication_sensors(repl_task.id, repl_task.name):
             entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_TASKS))
 
-    for task in coordinator.data.snapshot_tasks:
-        for desc in _snapshot_task_sensors(task.id, task.dataset):
+    for snap_task in coordinator.data.snapshot_tasks:
+        for desc in _snapshot_task_sensors(snap_task.id, snap_task.dataset):
             entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_TASKS))
 
-    for task in coordinator.data.cloud_sync_tasks:
-        for desc in _cloudsync_sensors(task.id, task.description):
+    for cs_task in coordinator.data.cloud_sync_tasks:
+        for desc in _cloudsync_sensors(cs_task.id, cs_task.description):
             entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_TASKS))
 
-    for task in coordinator.data.rsync_tasks:
-        for desc in _rsync_sensors(task.id, task.path):
+    for rsync_task in coordinator.data.rsync_tasks:
+        for desc in _rsync_sensors(rsync_task.id, rsync_task.path):
             entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_TASKS))
 
     async_add_entities(entities)
@@ -282,10 +290,10 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             key=f"pool_{pool_name}_status",
             name=f"{pool_name} status",
             icon="mdi:database",
-            value_fn=lambda data, _p=pool_name: (
+            value_fn=lambda data:(
                 p.status if (p := _find_pool(data)) else None
             ),
-            extra_attrs_fn=lambda data, _p=pool_name: {
+            extra_attrs_fn=lambda data:{
                 "scan_state": p.scan_state,
                 "scan_percentage": p.scan_percentage,
                 "autotrim": p.autotrim,
@@ -301,7 +309,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=2,
             icon="mdi:database",
-            value_fn=lambda data, _p=pool_name: round(p.allocated / (1024**3), 2)
+            value_fn=lambda data:round(p.allocated / (1024**3), 2)
             if (p := _find_pool(data))
             else None,
         ),
@@ -313,7 +321,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             device_class=SensorDeviceClass.DATA_SIZE,
             suggested_display_precision=2,
             icon="mdi:database",
-            value_fn=lambda data, _p=pool_name: round(p.free / (1024**3), 2)
+            value_fn=lambda data:round(p.free / (1024**3), 2)
             if (p := _find_pool(data))
             else None,
         ),
@@ -325,7 +333,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             suggested_display_precision=2,
             icon="mdi:database",
             entity_category=EntityCategory.DIAGNOSTIC,
-            value_fn=lambda data, _p=pool_name: round(p.size / (1024**3), 2)
+            value_fn=lambda data:round(p.size / (1024**3), 2)
             if (p := _find_pool(data))
             else None,
         ),
@@ -336,7 +344,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=1,
             icon="mdi:gauge",
-            value_fn=lambda data, _p=pool_name: round(
+            value_fn=lambda data:round(
                 p.allocated / p.size * 100, 1
             )
             if (p := _find_pool(data)) and p.size > 0
@@ -348,7 +356,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             native_unit_of_measurement=PERCENTAGE,
             icon="mdi:chart-bubble",
             entity_category=EntityCategory.DIAGNOSTIC,
-            value_fn=lambda data, _p=pool_name: p.fragmentation
+            value_fn=lambda data:p.fragmentation
             if (p := _find_pool(data))
             else None,
         ),
@@ -369,10 +377,10 @@ def _disk_sensors(disk_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             device_class=SensorDeviceClass.TEMPERATURE,
             state_class=SensorStateClass.MEASUREMENT,
             icon="mdi:thermometer",
-            value_fn=lambda data, _d=disk_name: d.temperature
+            value_fn=lambda data:d.temperature
             if (d := _find_disk(data)) and d.temperature is not None
             else None,
-            extra_attrs_fn=lambda data, _d=disk_name: {
+            extra_attrs_fn=lambda data:{
                 "model": d.model,
                 "serial": d.serial,
                 "type": d.type,
@@ -389,7 +397,6 @@ def _dataset_sensors(
 ) -> tuple[TrueNASSensorEntityDescription, ...]:
     """Create sensor descriptions for a dataset."""
     safe_id = dataset_id.replace("/", "_")
-    short_name = dataset_id.rsplit("/", 1)[-1]
 
     def _find_dataset(data: TrueNASData) -> Any:
         return next((d for d in data.datasets if d.id == dataset_id), None)
@@ -404,12 +411,12 @@ def _dataset_sensors(
             suggested_display_precision=2,
             icon="mdi:folder",
             entity_registry_enabled_default=enabled_default,
-            value_fn=lambda data, _id=dataset_id: round(
+            value_fn=lambda data:round(
                 ds.used_bytes / (1024**3), 2
             )
             if (ds := _find_dataset(data))
             else None,
-            extra_attrs_fn=lambda data, _id=dataset_id: {
+            extra_attrs_fn=lambda data:{
                 "dataset": ds.id,
                 "type": ds.type,
                 "mountpoint": ds.mountpoint,
@@ -427,7 +434,7 @@ def _dataset_sensors(
             suggested_display_precision=2,
             icon="mdi:folder",
             entity_registry_enabled_default=enabled_default,
-            value_fn=lambda data, _id=dataset_id: round(
+            value_fn=lambda data:round(
                 ds.available_bytes / (1024**3), 2
             )
             if (ds := _find_dataset(data))
@@ -441,7 +448,7 @@ def _dataset_sensors(
             suggested_display_precision=1,
             icon="mdi:gauge",
             entity_registry_enabled_default=enabled_default,
-            value_fn=lambda data, _id=dataset_id: round(
+            value_fn=lambda data:round(
                 ds.used_bytes / (ds.used_bytes + ds.available_bytes) * 100, 1
             )
             if (ds := _find_dataset(data))
@@ -462,10 +469,10 @@ def _app_sensors(app_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             key=f"app_{app_name}_status",
             name=f"{app_name}",
             icon="mdi:application",
-            value_fn=lambda data, _a=app_name: a.state
+            value_fn=lambda data:a.state
             if (a := _find_app(data))
             else None,
-            extra_attrs_fn=lambda data, _a=app_name: {
+            extra_attrs_fn=lambda data:{
                 "version": a.human_version,
                 "upgrade_available": a.upgrade_available,
             }
@@ -488,10 +495,10 @@ def _vm_sensors(
             key=f"vm_{vm_id}_status",
             name=f"{vm_name}",
             icon="mdi:monitor",
-            value_fn=lambda data, _id=vm_id: v.status
+            value_fn=lambda data:v.status
             if (v := _find_vm(data))
             else None,
-            extra_attrs_fn=lambda data, _id=vm_id: {
+            extra_attrs_fn=lambda data:{
                 "vcpus": v.vcpus,
                 "memory_mb": v.memory,
                 "autostart": v.autostart,
@@ -517,10 +524,10 @@ def _replication_sensors(
             key=f"replication_{task_id}_status",
             name=f"{task_name}",
             icon="mdi:swap-horizontal",
-            value_fn=lambda data, _id=task_id: t.state
+            value_fn=lambda data:t.state
             if (t := _find_task(data))
             else None,
-            extra_attrs_fn=lambda data, _id=task_id: {
+            extra_attrs_fn=lambda data:{
                 "name": t.name,
                 "direction": t.direction,
                 "last_run": t.last_run,
@@ -547,10 +554,10 @@ def _snapshot_task_sensors(
             key=f"snapshottask_{task_id}_status",
             name=f"{dataset}",
             icon="mdi:camera",
-            value_fn=lambda data, _id=task_id: t.state
+            value_fn=lambda data:t.state
             if (t := _find_task(data))
             else None,
-            extra_attrs_fn=lambda data, _id=task_id: {
+            extra_attrs_fn=lambda data:{
                 "dataset": t.dataset,
                 "last_run": t.last_run,
                 "enabled": t.enabled,
@@ -577,10 +584,10 @@ def _cloudsync_sensors(
             key=f"cloudsync_{task_id}_status",
             name=f"{description or f'Task {task_id}'}",
             icon="mdi:cloud-sync",
-            value_fn=lambda data, _id=task_id: t.state
+            value_fn=lambda data:t.state
             if (t := _find_task(data))
             else None,
-            extra_attrs_fn=lambda data, _id=task_id: {
+            extra_attrs_fn=lambda data:{
                 "description": t.description,
                 "direction": t.direction,
                 "last_run": t.last_run,
@@ -610,10 +617,10 @@ def _rsync_sensors(
             key=f"rsync_{task_id}_status",
             name=f"{short_path or f'Rsync {task_id}'}",
             icon="mdi:sync",
-            value_fn=lambda data, _id=task_id: t.state
+            value_fn=lambda data:t.state
             if (t := _find_task(data))
             else None,
-            extra_attrs_fn=lambda data, _id=task_id: {
+            extra_attrs_fn=lambda data:{
                 "path": t.path,
                 "remote_host": t.remote_host,
                 "remote_path": t.remote_path,

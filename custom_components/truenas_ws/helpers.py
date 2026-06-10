@@ -17,9 +17,11 @@ def bytes_to_gib(size_bytes: int | float) -> float:
     return round(size_bytes / (1024**3), 2)
 
 
-def safe_get(data: dict, *keys: str, default: object = None) -> object:
+def safe_get(
+    data: dict[str, object], *keys: str, default: object = None
+) -> object:
     """Safely traverse nested dict keys."""
-    current = data
+    current: object = data
     for key in keys:
         if not isinstance(current, dict):
             return default

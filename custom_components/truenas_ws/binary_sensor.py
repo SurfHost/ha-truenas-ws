@@ -15,7 +15,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
+from .coordinator import TrueNASConfigEntry
 from .entity import DEVICE_KEY_STORAGE, DEVICE_KEY_SYSTEM, TrueNASEntity
 from .models import TrueNASData
 
@@ -37,7 +37,10 @@ SYSTEM_BINARY_SENSORS: tuple[TrueNASBinarySensorEntityDescription, ...] = (
         name="System problem",
         device_class=BinarySensorDeviceClass.PROBLEM,
         icon="mdi:check-network",
-        value_fn=lambda data: len([a for a in data.alerts if not a.dismissed and a.level in ("CRITICAL", "ERROR")]) > 0,
+        value_fn=lambda data: any(
+            not a.dismissed and a.level in ("CRITICAL", "ERROR")
+            for a in data.alerts
+        ),
     ),
     TrueNASBinarySensorEntityDescription(
         key="update_available",
@@ -68,38 +71,60 @@ async def async_setup_entry(
 
     # Pool health
     for pool in coordinator.data.pools:
-        desc = TrueNASBinarySensorEntityDescription(
-            key=f"pool_{pool.name}_healthy",
-            name=f"{pool.name} problem",
-            device_class=BinarySensorDeviceClass.PROBLEM,
-            icon="mdi:database-check",
-            value_fn=lambda data, _name=pool.name: not p.healthy
-            if (p := next((x for x in data.pools if x.name == _name), None))
-            else None,
-            extra_attrs_fn=lambda data, _name=pool.name: {
-                "status": p.status,
-                "warning": p.warning,
-            }
-            if (p := next((x for x in data.pools if x.name == _name), None))
-            else {},
+        entities.append(
+            TrueNASBinarySensor(
+                coordinator, _pool_problem_desc(pool.name), DEVICE_KEY_STORAGE
+            )
         )
-        entities.append(TrueNASBinarySensor(coordinator, desc, DEVICE_KEY_STORAGE))
 
     # Disk SMART health
     for disk in coordinator.data.disks:
-        desc = TrueNASBinarySensorEntityDescription(
-            key=f"disk_{disk.name}_smart_healthy",
-            name=f"{disk.name} problem",
-            device_class=BinarySensorDeviceClass.PROBLEM,
-            icon="mdi:harddisk",
-            entity_category=EntityCategory.DIAGNOSTIC,
-            value_fn=lambda data, _name=disk.name: False,  # placeholder - SMART needs separate query
-        )
         entities.append(
-            TrueNASBinarySensor(coordinator, desc, DEVICE_KEY_STORAGE)
+            TrueNASBinarySensor(
+                coordinator, _disk_smart_desc(disk.name), DEVICE_KEY_STORAGE
+            )
         )
 
     async_add_entities(entities)
+
+
+def _pool_problem_desc(pool_name: str) -> TrueNASBinarySensorEntityDescription:
+    """Create the problem binary sensor description for a pool."""
+
+    def _find_pool(data: TrueNASData) -> Any:
+        return next((x for x in data.pools if x.name == pool_name), None)
+
+    return TrueNASBinarySensorEntityDescription(
+        key=f"pool_{pool_name}_healthy",
+        name=f"{pool_name} problem",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        icon="mdi:database-check",
+        value_fn=lambda data: not p.healthy
+        if (p := _find_pool(data))
+        else None,
+        extra_attrs_fn=lambda data: {
+            "status": p.status,
+            "warning": p.warning,
+        }
+        if (p := _find_pool(data))
+        else {},
+    )
+
+
+def _disk_smart_desc(disk_name: str) -> TrueNASBinarySensorEntityDescription:
+    """Create the SMART problem binary sensor description for a disk."""
+    return TrueNASBinarySensorEntityDescription(
+        key=f"disk_{disk_name}_smart_healthy",
+        name=f"{disk_name} problem",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        icon="mdi:harddisk",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: (
+            None
+            if (s := data.disk_smart.get(disk_name)) is None or s.passed is None
+            else not s.passed
+        ),
+    )
 
 
 class TrueNASBinarySensor(TrueNASEntity, BinarySensorEntity):

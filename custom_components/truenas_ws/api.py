@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import ssl
 import time
@@ -22,6 +23,7 @@ from .models import (
     CloudSyncTask,
     DatasetInfo,
     DiskInfo,
+    DiskSmartInfo,
     NetworkInterface,
     PoolInfo,
     ReplicationTask,
@@ -120,6 +122,7 @@ class TrueNASWebSocketClient:
         self._pending: dict[int, asyncio.Future[Any]] = {}
         self._listen_task: asyncio.Task[None] | None = None
         self._connected = False
+        self._connect_lock = asyncio.Lock()
 
     @property
     def connected(self) -> bool:
@@ -135,47 +138,52 @@ class TrueNASWebSocketClient:
 
     async def connect(self) -> None:
         """Connect to TrueNAS WebSocket and authenticate."""
-        if self._connected and self._ws is not None and not self._ws.closed:
-            return
-
-        await self._close_ws()
-
-        ssl_context: ssl.SSLContext | bool | None = None
-        if not self._verify_ssl:
-            ssl_context = False
-
-        last_err: Exception | None = None
-        for url in self._build_urls():
-            try:
-                _LOGGER.debug("Trying WebSocket connection to %s", url)
-                self._ws = await self._session.ws_connect(
-                    url,
-                    ssl=ssl_context if url.startswith("wss") else None,
-                    heartbeat=30,
-                    timeout=aiohttp.ClientWSTimeout(ws_close=10),
-                )
-                self._connected = True
-                self._listen_task = asyncio.create_task(self._listen())
-                _LOGGER.debug("Connected to %s", url)
-                await self._authenticate()
+        async with self._connect_lock:
+            if self._connected and self._ws is not None and not self._ws.closed:
                 return
-            except TrueNASAuthenticationError:
-                # Credentials are wrong — no point trying other URLs
-                await self._close_ws()
-                raise
-            except (
-                aiohttp.WSServerHandshakeError,
-                aiohttp.ClientError,
-                TimeoutError,
-                OSError,
-            ) as err:
-                _LOGGER.debug("Failed to connect to %s: %s", url, err)
-                last_err = err
-                await self._close_ws()
 
-        raise TrueNASConnectionError(
-            f"Cannot connect to {self._host}: {last_err}"
-        )
+            await self._close_ws()
+
+            ssl_context: ssl.SSLContext | bool = True
+            if not self._verify_ssl:
+                ssl_context = False
+
+            last_err: Exception | None = None
+            for url in self._build_urls():
+                try:
+                    _LOGGER.debug("Trying WebSocket connection to %s", url)
+                    self._ws = await self._session.ws_connect(
+                        url,
+                        ssl=ssl_context if url.startswith("wss") else True,
+                        heartbeat=30,
+                        timeout=aiohttp.ClientWSTimeout(ws_close=10),
+                    )
+                    self._connected = True
+                    self._listen_task = asyncio.create_task(self._listen())
+                    _LOGGER.debug("Connected to %s", url)
+                    await self._authenticate()
+                    return
+                except TrueNASAuthenticationError:
+                    # Credentials are wrong — no point trying other URLs
+                    await self._close_ws()
+                    raise
+                except (
+                    aiohttp.WSServerHandshakeError,
+                    aiohttp.ClientError,
+                    TimeoutError,
+                    OSError,
+                    # Raised by _authenticate() when the request fails or
+                    # times out — must clean up the ws + listen task too.
+                    TrueNASConnectionError,
+                    TrueNASTimeoutError,
+                ) as err:
+                    _LOGGER.debug("Failed to connect to %s: %s", url, err)
+                    last_err = err
+                    await self._close_ws()
+
+            raise TrueNASConnectionError(
+                f"Cannot connect to {self._host}: {last_err}"
+            )
 
     async def disconnect(self) -> None:
         """Disconnect from TrueNAS."""
@@ -187,10 +195,8 @@ class TrueNASWebSocketClient:
 
         if self._listen_task is not None and not self._listen_task.done():
             self._listen_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._listen_task
-            except asyncio.CancelledError:
-                pass
             self._listen_task = None
 
         if self._ws is not None and not self._ws.closed:
@@ -358,13 +364,15 @@ class TrueNASWebSocketClient:
                 mem_total = int(virtual_mem.get("total", 0))
                 mem_used = int(virtual_mem.get("used", 0))
                 mem_free = int(
-                    virtual_mem.get("available", virtual_mem.get("free", 0))
+                    virtual_mem.get("available") or virtual_mem.get("free") or 0
                 )
 
             mem_raw = result.get("memory", {})
             if isinstance(mem_raw, dict):
                 if mem_total == 0:
-                    mem_total = int(mem_raw.get("physmem", mem_raw.get("total", 0)))
+                    mem_total = int(
+                        mem_raw.get("physmem") or mem_raw.get("total") or 0
+                    )
                 if mem_used == 0:
                     mem_used = int(mem_raw.get("used", 0))
                 if mem_free == 0:
@@ -440,7 +448,6 @@ class TrueNASWebSocketClient:
             memory_free_bytes=mem_free,
             arc_size=arc_size,
             arc_max=arc_max,
-            arc_hit_ratio=0.0,
             cpu_temperature=cpu_temp,
         )
 
@@ -479,7 +486,7 @@ class TrueNASWebSocketClient:
         data_points = report[0].get("data", []) if isinstance(report[0], dict) else []
         for row in reversed(data_points):
             if isinstance(row, list) and len(row) > 1:
-                vals = [v for v in row[1:] if v is not None]
+                vals = [float(v) for v in row[1:] if isinstance(v, (int, float))]
                 if vals:
                     return round(sum(vals) / len(vals), 1)
         return None
@@ -507,6 +514,46 @@ class TrueNASWebSocketClient:
         except (TrueNASAPIError, TrueNASTimeoutError):
             return {}
         return dict(result) if isinstance(result, dict) else {}
+
+    async def get_disk_smart(
+        self, disk_names: list[str]
+    ) -> dict[str, DiskSmartInfo]:
+        """Get SMART self-test verdicts keyed by disk name.
+
+        Uses ``smart.test.results``. The endpoint and its response shape
+        have varied across SCALE releases, so parse defensively and
+        degrade to an empty dict (sensors show unknown) when unavailable.
+        """
+        if not disk_names:
+            return {}
+        try:
+            result = await self._send_request(
+                "smart.test.results", [[["disk", "in", disk_names]]]
+            )
+        except (TrueNASAPIError, TrueNASTimeoutError):
+            return {}
+
+        smart: dict[str, DiskSmartInfo] = {}
+        if not isinstance(result, list):
+            return smart
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+            disk = item.get("disk")
+            if not disk:
+                continue
+            # Tests are newest-first; the first finished one is the verdict.
+            passed: bool | None = None
+            for test in item.get("tests") or []:
+                status = test.get("status") if isinstance(test, dict) else None
+                if status is None or status == "RUNNING":
+                    continue
+                passed = status == "SUCCESS"
+                break
+            smart[disk] = DiskSmartInfo(
+                disk_name=disk, passed=passed, temperature=None
+            )
+        return smart
 
     async def get_pools(self) -> list[PoolInfo]:
         """Get ZFS pool information including the boot pool."""
@@ -620,11 +667,11 @@ class TrueNASWebSocketClient:
 
     async def start_service(self, service_name: str) -> bool:
         """Start a service."""
-        return await self._send_request("service.start", [service_name])
+        return bool(await self._send_request("service.start", [service_name]))
 
     async def stop_service(self, service_name: str) -> bool:
         """Stop a service."""
-        return await self._send_request("service.stop", [service_name])
+        return bool(await self._send_request("service.stop", [service_name]))
 
     async def start_vm(self, vm_id: int) -> None:
         """Start a virtual machine."""
@@ -659,14 +706,14 @@ class TrueNASWebSocketClient:
         if not self._connected or self._ws is None or self._ws.closed:
             raise TrueNASConnectionError("Not connected")
 
-        try:
+        # Expected to fail — the system disconnects as it reboots/shuts down
+        with contextlib.suppress(
+            TrueNASConnectionError, TrueNASTimeoutError, TimeoutError
+        ):
             await asyncio.wait_for(
                 self._send_request(method, ["Home Assistant"]),
                 timeout=10.0,
             )
-        except (TrueNASConnectionError, TrueNASTimeoutError, TimeoutError):
-            # Expected — system disconnects as it reboots/shuts down
-            pass
 
     async def create_snapshot(self, dataset: str, name: str) -> None:
         """Create a ZFS snapshot."""
@@ -685,10 +732,10 @@ class TrueNASWebSocketClient:
         if not self._connected or self._ws is None or self._ws.closed:
             raise TrueNASConnectionError("Not connected")
 
-        try:
+        with contextlib.suppress(
+            TrueNASConnectionError, TrueNASTimeoutError, TimeoutError
+        ):
             await asyncio.wait_for(
                 self._send_request("update.run", [{"reboot": True}]),
                 timeout=30.0,
             )
-        except (TrueNASConnectionError, TrueNASTimeoutError, TimeoutError):
-            pass
