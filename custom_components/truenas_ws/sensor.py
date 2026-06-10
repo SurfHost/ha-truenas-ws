@@ -51,9 +51,7 @@ def _alert_attrs(data: TrueNASData) -> dict[str, Any]:
         "error": sum(a.level == "ERROR" for a in active),
         "warning": sum(a.level == "WARNING" for a in active),
         "info": sum(a.level == "INFO" for a in active),
-        "latest": [
-            {"level": a.level, "message": a.message[:200]} for a in active[:5]
-        ],
+        "latest": [{"level": a.level, "message": a.message[:200]} for a in active[:5]],
     }
 
 
@@ -68,9 +66,7 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         icon="mdi:cpu-64-bit",
-        value_fn=lambda data: round(data.system_stats.cpu_usage, 1)
-        if data.system_stats
-        else None,
+        value_fn=lambda data: round(data.system_stats.cpu_usage, 1) if data.system_stats else None,
     ),
     TrueNASSensorEntityDescription(
         key="cpu_temperature",
@@ -80,9 +76,11 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:thermometer",
-        value_fn=lambda data: data.system_stats.cpu_temperature
-        if data.system_stats and data.system_stats.cpu_temperature is not None
-        else None,
+        value_fn=lambda data: (
+            data.system_stats.cpu_temperature
+            if data.system_stats and data.system_stats.cpu_temperature is not None
+            else None
+        ),
     ),
     TrueNASSensorEntityDescription(
         key="memory_usage_percent",
@@ -92,9 +90,11 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         icon="mdi:memory",
-        value_fn=lambda data: data.system_stats.memory_usage_percent
-        if data.system_stats and data.system_stats.memory_usage_percent > 0
-        else None,
+        value_fn=lambda data: (
+            data.system_stats.memory_usage_percent
+            if data.system_stats and data.system_stats.memory_usage_percent > 0
+            else None
+        ),
     ),
     TrueNASSensorEntityDescription(
         key="memory_used",
@@ -106,9 +106,11 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         suggested_display_precision=2,
         icon="mdi:memory",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: round(data.system_stats.memory_used_bytes / (1024**3), 2)
-        if data.system_stats and data.system_stats.memory_used_bytes > 0
-        else None,
+        value_fn=lambda data: (
+            round(data.system_stats.memory_used_bytes / (1024**3), 2)
+            if data.system_stats and data.system_stats.memory_used_bytes > 0
+            else None
+        ),
     ),
     # memory_free is redundant with memory_used + memory_usage_percent for
     # long-term stats; omit state_class to avoid duplicate LTS.
@@ -121,9 +123,11 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         suggested_display_precision=2,
         icon="mdi:memory",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: round(data.system_stats.memory_free_bytes / (1024**3), 2)
-        if data.system_stats and data.system_stats.memory_free_bytes > 0
-        else None,
+        value_fn=lambda data: (
+            round(data.system_stats.memory_free_bytes / (1024**3), 2)
+            if data.system_stats and data.system_stats.memory_free_bytes > 0
+            else None
+        ),
     ),
     # Load averages only refresh with system.info (every 12h), so long-term
     # statistics would just repeat the same value hourly. Omit state_class.
@@ -134,9 +138,7 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         suggested_display_precision=2,
         icon="mdi:gauge",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: round(data.system_info.load_avg_1, 2)
-        if data.system_info
-        else None,
+        value_fn=lambda data: round(data.system_info.load_avg_1, 2) if data.system_info else None,
     ),
     TrueNASSensorEntityDescription(
         key="load_avg_5",
@@ -145,9 +147,7 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         suggested_display_precision=2,
         icon="mdi:gauge",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: round(data.system_info.load_avg_5, 2)
-        if data.system_info
-        else None,
+        value_fn=lambda data: round(data.system_info.load_avg_5, 2) if data.system_info else None,
     ),
     TrueNASSensorEntityDescription(
         key="load_avg_15",
@@ -156,9 +156,7 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         suggested_display_precision=2,
         icon="mdi:gauge",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: round(data.system_info.load_avg_15, 2)
-        if data.system_info
-        else None,
+        value_fn=lambda data: round(data.system_info.load_avg_15, 2) if data.system_info else None,
     ),
     TrueNASSensorEntityDescription(
         key="uptime",
@@ -167,10 +165,10 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TIMESTAMP,
         icon="mdi:clock-outline",
         value_fn=lambda data: (
-            datetime.now(tz=UTC) - timedelta(seconds=data.system_info.uptime_seconds)
-        )
-        if data.system_info and data.system_info.uptime_seconds > 0
-        else None,
+            (datetime.now(tz=UTC) - timedelta(seconds=data.system_info.uptime_seconds))
+            if data.system_info and data.system_info.uptime_seconds > 0
+            else None
+        ),
     ),
     TrueNASSensorEntityDescription(
         key="arc_size",
@@ -182,9 +180,11 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         suggested_display_precision=2,
         icon="mdi:database",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: round(data.system_stats.arc_size / (1024**3), 2)
-        if data.system_stats and data.system_stats.arc_size > 0
-        else None,
+        value_fn=lambda data: (
+            round(data.system_stats.arc_size / (1024**3), 2)
+            if data.system_stats and data.system_stats.arc_size > 0
+            else None
+        ),
     ),
     TrueNASSensorEntityDescription(
         key="alerts",
@@ -290,16 +290,16 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             key=f"pool_{pool_name}_status",
             name=f"{pool_name} status",
             icon="mdi:database",
-            value_fn=lambda data:(
-                p.status if (p := _find_pool(data)) else None
+            value_fn=lambda data: p.status if (p := _find_pool(data)) else None,
+            extra_attrs_fn=lambda data: (
+                {
+                    "scan_state": p.scan_state,
+                    "scan_percentage": p.scan_percentage,
+                    "autotrim": p.autotrim,
+                }
+                if (p := _find_pool(data))
+                else {}
             ),
-            extra_attrs_fn=lambda data:{
-                "scan_state": p.scan_state,
-                "scan_percentage": p.scan_percentage,
-                "autotrim": p.autotrim,
-            }
-            if (p := _find_pool(data))
-            else {},
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_used",
@@ -309,9 +309,9 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=2,
             icon="mdi:database",
-            value_fn=lambda data:round(p.allocated / (1024**3), 2)
-            if (p := _find_pool(data))
-            else None,
+            value_fn=lambda data: (
+                round(p.allocated / (1024**3), 2) if (p := _find_pool(data)) else None
+            ),
         ),
         # Pool free is redundant with used + usage%; no LTS.
         TrueNASSensorEntityDescription(
@@ -321,9 +321,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             device_class=SensorDeviceClass.DATA_SIZE,
             suggested_display_precision=2,
             icon="mdi:database",
-            value_fn=lambda data:round(p.free / (1024**3), 2)
-            if (p := _find_pool(data))
-            else None,
+            value_fn=lambda data: round(p.free / (1024**3), 2) if (p := _find_pool(data)) else None,
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_total",
@@ -333,9 +331,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             suggested_display_precision=2,
             icon="mdi:database",
             entity_category=EntityCategory.DIAGNOSTIC,
-            value_fn=lambda data:round(p.size / (1024**3), 2)
-            if (p := _find_pool(data))
-            else None,
+            value_fn=lambda data: round(p.size / (1024**3), 2) if (p := _find_pool(data)) else None,
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_usage",
@@ -344,11 +340,11 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             state_class=SensorStateClass.MEASUREMENT,
             suggested_display_precision=1,
             icon="mdi:gauge",
-            value_fn=lambda data:round(
-                p.allocated / p.size * 100, 1
-            )
-            if (p := _find_pool(data)) and p.size > 0
-            else None,
+            value_fn=lambda data: (
+                round(p.allocated / p.size * 100, 1)
+                if (p := _find_pool(data)) and p.size > 0
+                else None
+            ),
         ),
         TrueNASSensorEntityDescription(
             key=f"pool_{pool_name}_fragmentation",
@@ -356,9 +352,7 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             native_unit_of_measurement=PERCENTAGE,
             icon="mdi:chart-bubble",
             entity_category=EntityCategory.DIAGNOSTIC,
-            value_fn=lambda data:p.fragmentation
-            if (p := _find_pool(data))
-            else None,
+            value_fn=lambda data: p.fragmentation if (p := _find_pool(data)) else None,
         ),
     )
 
@@ -377,16 +371,18 @@ def _disk_sensors(disk_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             device_class=SensorDeviceClass.TEMPERATURE,
             state_class=SensorStateClass.MEASUREMENT,
             icon="mdi:thermometer",
-            value_fn=lambda data:d.temperature
-            if (d := _find_disk(data)) and d.temperature is not None
-            else None,
-            extra_attrs_fn=lambda data:{
-                "model": d.model,
-                "serial": d.serial,
-                "type": d.type,
-            }
-            if (d := _find_disk(data))
-            else {},
+            value_fn=lambda data: (
+                d.temperature if (d := _find_disk(data)) and d.temperature is not None else None
+            ),
+            extra_attrs_fn=lambda data: (
+                {
+                    "model": d.model,
+                    "serial": d.serial,
+                    "type": d.type,
+                }
+                if (d := _find_disk(data))
+                else {}
+            ),
         ),
     )
 
@@ -411,19 +407,19 @@ def _dataset_sensors(
             suggested_display_precision=2,
             icon="mdi:folder",
             entity_registry_enabled_default=enabled_default,
-            value_fn=lambda data:round(
-                ds.used_bytes / (1024**3), 2
-            )
-            if (ds := _find_dataset(data))
-            else None,
-            extra_attrs_fn=lambda data:{
-                "dataset": ds.id,
-                "type": ds.type,
-                "mountpoint": ds.mountpoint,
-                "encrypted": ds.encrypted,
-            }
-            if (ds := _find_dataset(data))
-            else {},
+            value_fn=lambda data: (
+                round(ds.used_bytes / (1024**3), 2) if (ds := _find_dataset(data)) else None
+            ),
+            extra_attrs_fn=lambda data: (
+                {
+                    "dataset": ds.id,
+                    "type": ds.type,
+                    "mountpoint": ds.mountpoint,
+                    "encrypted": ds.encrypted,
+                }
+                if (ds := _find_dataset(data))
+                else {}
+            ),
         ),
         # Dataset available is redundant with used + usage%; no LTS.
         TrueNASSensorEntityDescription(
@@ -434,11 +430,9 @@ def _dataset_sensors(
             suggested_display_precision=2,
             icon="mdi:folder",
             entity_registry_enabled_default=enabled_default,
-            value_fn=lambda data:round(
-                ds.available_bytes / (1024**3), 2
-            )
-            if (ds := _find_dataset(data))
-            else None,
+            value_fn=lambda data: (
+                round(ds.available_bytes / (1024**3), 2) if (ds := _find_dataset(data)) else None
+            ),
         ),
         TrueNASSensorEntityDescription(
             key=f"dataset_{safe_id}_usage",
@@ -448,12 +442,11 @@ def _dataset_sensors(
             suggested_display_precision=1,
             icon="mdi:gauge",
             entity_registry_enabled_default=enabled_default,
-            value_fn=lambda data:round(
-                ds.used_bytes / (ds.used_bytes + ds.available_bytes) * 100, 1
-            )
-            if (ds := _find_dataset(data))
-            and (ds.used_bytes + ds.available_bytes) > 0
-            else None,
+            value_fn=lambda data: (
+                round(ds.used_bytes / (ds.used_bytes + ds.available_bytes) * 100, 1)
+                if (ds := _find_dataset(data)) and (ds.used_bytes + ds.available_bytes) > 0
+                else None
+            ),
         ),
     )
 
@@ -469,22 +462,20 @@ def _app_sensors(app_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             key=f"app_{app_name}_status",
             name=f"{app_name}",
             icon="mdi:application",
-            value_fn=lambda data:a.state
-            if (a := _find_app(data))
-            else None,
-            extra_attrs_fn=lambda data:{
-                "version": a.human_version,
-                "upgrade_available": a.upgrade_available,
-            }
-            if (a := _find_app(data))
-            else {},
+            value_fn=lambda data: a.state if (a := _find_app(data)) else None,
+            extra_attrs_fn=lambda data: (
+                {
+                    "version": a.human_version,
+                    "upgrade_available": a.upgrade_available,
+                }
+                if (a := _find_app(data))
+                else {}
+            ),
         ),
     )
 
 
-def _vm_sensors(
-    vm_name: str, vm_id: int
-) -> tuple[TrueNASSensorEntityDescription, ...]:
+def _vm_sensors(vm_name: str, vm_id: int) -> tuple[TrueNASSensorEntityDescription, ...]:
     """Create sensor descriptions for a VM."""
 
     def _find_vm(data: TrueNASData) -> Any:
@@ -495,16 +486,16 @@ def _vm_sensors(
             key=f"vm_{vm_id}_status",
             name=f"{vm_name}",
             icon="mdi:monitor",
-            value_fn=lambda data:v.status
-            if (v := _find_vm(data))
-            else None,
-            extra_attrs_fn=lambda data:{
-                "vcpus": v.vcpus,
-                "memory_mb": v.memory,
-                "autostart": v.autostart,
-            }
-            if (v := _find_vm(data))
-            else {},
+            value_fn=lambda data: v.status if (v := _find_vm(data)) else None,
+            extra_attrs_fn=lambda data: (
+                {
+                    "vcpus": v.vcpus,
+                    "memory_mb": v.memory,
+                    "autostart": v.autostart,
+                }
+                if (v := _find_vm(data))
+                else {}
+            ),
         ),
     )
 
@@ -515,26 +506,24 @@ def _replication_sensors(
     """Create sensor descriptions for a replication task."""
 
     def _find_task(data: TrueNASData) -> Any:
-        return next(
-            (t for t in data.replication_tasks if t.id == task_id), None
-        )
+        return next((t for t in data.replication_tasks if t.id == task_id), None)
 
     return (
         TrueNASSensorEntityDescription(
             key=f"replication_{task_id}_status",
             name=f"{task_name}",
             icon="mdi:swap-horizontal",
-            value_fn=lambda data:t.state
-            if (t := _find_task(data))
-            else None,
-            extra_attrs_fn=lambda data:{
-                "name": t.name,
-                "direction": t.direction,
-                "last_run": t.last_run,
-                "enabled": t.enabled,
-            }
-            if (t := _find_task(data))
-            else {},
+            value_fn=lambda data: t.state if (t := _find_task(data)) else None,
+            extra_attrs_fn=lambda data: (
+                {
+                    "name": t.name,
+                    "direction": t.direction,
+                    "last_run": t.last_run,
+                    "enabled": t.enabled,
+                }
+                if (t := _find_task(data))
+                else {}
+            ),
         ),
     )
 
@@ -545,26 +534,24 @@ def _snapshot_task_sensors(
     """Create sensor descriptions for a snapshot task."""
 
     def _find_task(data: TrueNASData) -> Any:
-        return next(
-            (t for t in data.snapshot_tasks if t.id == task_id), None
-        )
+        return next((t for t in data.snapshot_tasks if t.id == task_id), None)
 
     return (
         TrueNASSensorEntityDescription(
             key=f"snapshottask_{task_id}_status",
             name=f"{dataset}",
             icon="mdi:camera",
-            value_fn=lambda data:t.state
-            if (t := _find_task(data))
-            else None,
-            extra_attrs_fn=lambda data:{
-                "dataset": t.dataset,
-                "last_run": t.last_run,
-                "enabled": t.enabled,
-                "recursive": t.recursive,
-            }
-            if (t := _find_task(data))
-            else {},
+            value_fn=lambda data: t.state if (t := _find_task(data)) else None,
+            extra_attrs_fn=lambda data: (
+                {
+                    "dataset": t.dataset,
+                    "last_run": t.last_run,
+                    "enabled": t.enabled,
+                    "recursive": t.recursive,
+                }
+                if (t := _find_task(data))
+                else {}
+            ),
         ),
     )
 
@@ -575,40 +562,34 @@ def _cloudsync_sensors(
     """Create sensor descriptions for a cloud sync task."""
 
     def _find_task(data: TrueNASData) -> Any:
-        return next(
-            (t for t in data.cloud_sync_tasks if t.id == task_id), None
-        )
+        return next((t for t in data.cloud_sync_tasks if t.id == task_id), None)
 
     return (
         TrueNASSensorEntityDescription(
             key=f"cloudsync_{task_id}_status",
             name=f"{description or f'Task {task_id}'}",
             icon="mdi:cloud-sync",
-            value_fn=lambda data:t.state
-            if (t := _find_task(data))
-            else None,
-            extra_attrs_fn=lambda data:{
-                "description": t.description,
-                "direction": t.direction,
-                "last_run": t.last_run,
-                "enabled": t.enabled,
-                "path": t.path,
-            }
-            if (t := _find_task(data))
-            else {},
+            value_fn=lambda data: t.state if (t := _find_task(data)) else None,
+            extra_attrs_fn=lambda data: (
+                {
+                    "description": t.description,
+                    "direction": t.direction,
+                    "last_run": t.last_run,
+                    "enabled": t.enabled,
+                    "path": t.path,
+                }
+                if (t := _find_task(data))
+                else {}
+            ),
         ),
     )
 
 
-def _rsync_sensors(
-    task_id: int, path: str
-) -> tuple[TrueNASSensorEntityDescription, ...]:
+def _rsync_sensors(task_id: int, path: str) -> tuple[TrueNASSensorEntityDescription, ...]:
     """Create sensor descriptions for a rsync task."""
 
     def _find_task(data: TrueNASData) -> Any:
-        return next(
-            (t for t in data.rsync_tasks if t.id == task_id), None
-        )
+        return next((t for t in data.rsync_tasks if t.id == task_id), None)
 
     short_path = path.rsplit("/", 1)[-1] if "/" in path else path
 
@@ -617,19 +598,19 @@ def _rsync_sensors(
             key=f"rsync_{task_id}_status",
             name=f"{short_path or f'Rsync {task_id}'}",
             icon="mdi:sync",
-            value_fn=lambda data:t.state
-            if (t := _find_task(data))
-            else None,
-            extra_attrs_fn=lambda data:{
-                "path": t.path,
-                "remote_host": t.remote_host,
-                "remote_path": t.remote_path,
-                "direction": t.direction,
-                "last_run": t.last_run,
-                "enabled": t.enabled,
-                "description": t.description,
-            }
-            if (t := _find_task(data))
-            else {},
+            value_fn=lambda data: t.state if (t := _find_task(data)) else None,
+            extra_attrs_fn=lambda data: (
+                {
+                    "path": t.path,
+                    "remote_host": t.remote_host,
+                    "remote_path": t.remote_path,
+                    "direction": t.direction,
+                    "last_run": t.last_run,
+                    "enabled": t.enabled,
+                    "description": t.description,
+                }
+                if (t := _find_task(data))
+                else {}
+            ),
         ),
     )

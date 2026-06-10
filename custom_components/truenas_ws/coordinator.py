@@ -34,7 +34,6 @@ _LOGGER = logging.getLogger(__name__)
 type TrueNASConfigEntry = ConfigEntry[TrueNASDataUpdateCoordinator]
 
 
-
 class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
     """Coordinator to manage fetching TrueNAS data."""
 
@@ -95,24 +94,14 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
             data.system_stats = await self._safe_fetch(
                 self.client.get_system_stats, data.system_stats
             )
-            data.alerts = await self._safe_fetch(
-                self.client.get_alerts, data.alerts
-            )
-            data.services = await self._safe_fetch(
-                self.client.get_services, data.services
-            )
-            data.apps = await self._safe_fetch(
-                self.client.get_apps, data.apps
-            )
-            data.vms = await self._safe_fetch(
-                self.client.get_vms, data.vms
-            )
+            data.alerts = await self._safe_fetch(self.client.get_alerts, data.alerts)
+            data.services = await self._safe_fetch(self.client.get_services, data.services)
+            data.apps = await self._safe_fetch(self.client.get_apps, data.apps)
+            data.vms = await self._safe_fetch(self.client.get_vms, data.vms)
 
             # ── Medium tier: every ~5 min ───────────────────────────
             if not self._last_disk_pool or now - self._last_disk_pool > DEFAULT_DISK_POOL_INTERVAL:
-                data.disks = await self._safe_fetch(
-                    self.client.get_disks, data.disks
-                )
+                data.disks = await self._safe_fetch(self.client.get_disks, data.disks)
                 disk_names = [d.name for d in data.disks if d.name]
                 temps: dict[str, int | None] = await self._safe_fetch(
                     lambda: self.client.get_disk_temperatures(disk_names), {}
@@ -133,9 +122,7 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
                     lambda: self.client.get_disk_smart(disk_names),
                     data.disk_smart,
                 )
-                data.pools = await self._safe_fetch(
-                    self.client.get_pools, data.pools
-                )
+                data.pools = await self._safe_fetch(self.client.get_pools, data.pools)
                 data.network_interfaces = await self._safe_fetch(
                     self.client.get_network_interfaces, data.network_interfaces
                 )
@@ -143,9 +130,7 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
 
             # ── Slow tier: every ~15 min ────────────────────────────
             if not self._last_datasets or now - self._last_datasets > DEFAULT_DATASET_INTERVAL:
-                data.datasets = await self._safe_fetch(
-                    self.client.get_datasets, data.datasets
-                )
+                data.datasets = await self._safe_fetch(self.client.get_datasets, data.datasets)
                 self._last_datasets = now
 
             # ── Tasks: every ~5 min ─────────────────────────────────

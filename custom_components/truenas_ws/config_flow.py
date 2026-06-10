@@ -24,9 +24,7 @@ from .errors import TrueNASAuthenticationError, TrueNASConnectionError
 
 _LOGGER = logging.getLogger(__name__)
 
-_API_KEY_SELECTOR = TextSelector(
-    TextSelectorConfig(type=TextSelectorType.PASSWORD)
-)
+_API_KEY_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
@@ -42,9 +40,7 @@ class TrueNASConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
@@ -87,9 +83,7 @@ class TrueNASConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_reauth(
-        self, entry_data: dict[str, Any]
-    ) -> ConfigFlowResult:
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
         """Handle reauth flow."""
         return await self.async_step_reauth_confirm()
 
@@ -131,9 +125,7 @@ class TrueNASConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=vol.Schema(
-                {vol.Required(CONF_API_KEY): _API_KEY_SELECTOR}
-            ),
+            data_schema=vol.Schema({vol.Required(CONF_API_KEY): _API_KEY_SELECTOR}),
             description_placeholders={"title": reauth_entry.title},
             errors=errors,
         )
@@ -150,9 +142,7 @@ class TrueNASConfigFlow(ConfigFlow, domain=DOMAIN):
 class TrueNASOptionsFlowHandler(OptionsFlow):
     """Handle TrueNAS options."""
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)

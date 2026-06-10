@@ -64,12 +64,7 @@ class TrueNASSystemUpdateEntity(TrueNASEntity, UpdateEntity):
         """Return the latest version."""
         update = self.coordinator.data.update_info
         installed = self.installed_version
-        if (
-            update
-            and update.available
-            and update.version
-            and update.version != installed
-        ):
+        if update and update.available and update.version and update.version != installed:
             return update.version
         return installed
 
@@ -133,9 +128,7 @@ class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
     """
 
     _attr_has_entity_name = False
-    _attr_supported_features = (
-        UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
-    )
+    _attr_supported_features = UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
     _attr_icon = "mdi:application-cog"
 
     def __init__(

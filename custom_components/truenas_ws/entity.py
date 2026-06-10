@@ -37,9 +37,7 @@ class TrueNASEntity(CoordinatorEntity[TrueNASDataUpdateCoordinator]):
         super().__init__(coordinator)
         self.entity_description = description
         self._device_key = device_key
-        self._attr_unique_id = (
-            f"{coordinator.config_entry.entry_id}_{device_key}_{description.key}"
-        )
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{device_key}_{description.key}"
 
     @property
     def device_info(self) -> DeviceInfo:

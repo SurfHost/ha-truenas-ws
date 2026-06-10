@@ -28,9 +28,7 @@ async def async_setup_entry(
 
     # Service switches
     for service in coordinator.data.services:
-        entities.append(
-            TrueNASServiceSwitch(coordinator, service.service, service.id)
-        )
+        entities.append(TrueNASServiceSwitch(coordinator, service.service, service.id))
 
     # VM switches
     for vm in coordinator.data.vms:
@@ -74,11 +72,7 @@ class TrueNASServiceSwitch(TrueNASEntity, SwitchEntity):
     def is_on(self) -> bool:
         """Return True if the service is running."""
         service = next(
-            (
-                s
-                for s in self.coordinator.data.services
-                if s.service == self._service_name
-            ),
+            (s for s in self.coordinator.data.services if s.service == self._service_name),
             None,
         )
         return service.state == "RUNNING" if service else False

@@ -24,9 +24,7 @@ PLATFORMS: list[Platform] = [
 ]
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: TrueNASConfigEntry
-) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: TrueNASConfigEntry) -> bool:
     """Set up TrueNAS from a config entry."""
     session = async_get_clientsession(
         hass,
@@ -50,16 +48,12 @@ async def async_setup_entry(
     # Clean up entities from removed/reorganized features
     _async_cleanup_stale_entities(hass, entry)
 
-    entry.async_on_unload(
-        entry.add_update_listener(_async_update_listener)
-    )
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
 
 
-async def async_unload_entry(
-    hass: HomeAssistant, entry: TrueNASConfigEntry
-) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: TrueNASConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
@@ -67,9 +61,7 @@ async def async_unload_entry(
     return unload_ok
 
 
-def _async_cleanup_stale_entities(
-    hass: HomeAssistant, entry: TrueNASConfigEntry
-) -> None:
+def _async_cleanup_stale_entities(hass: HomeAssistant, entry: TrueNASConfigEntry) -> None:
     """Remove entities from reorganised features that no longer exist."""
     ent_reg = er.async_get(hass)
     entry_id = entry.entry_id
@@ -90,8 +82,6 @@ def _async_cleanup_stale_entities(
             ent_reg.async_remove(entity.entity_id)
 
 
-async def _async_update_listener(
-    hass: HomeAssistant, entry: TrueNASConfigEntry
-) -> None:
+async def _async_update_listener(hass: HomeAssistant, entry: TrueNASConfigEntry) -> None:
     """Handle options update."""
     await hass.config_entries.async_reload(entry.entry_id)

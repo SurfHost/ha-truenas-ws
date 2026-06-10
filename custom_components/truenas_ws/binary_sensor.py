@@ -38,8 +38,7 @@ SYSTEM_BINARY_SENSORS: tuple[TrueNASBinarySensorEntityDescription, ...] = (
         device_class=BinarySensorDeviceClass.PROBLEM,
         icon="mdi:check-network",
         value_fn=lambda data: any(
-            not a.dismissed and a.level in ("CRITICAL", "ERROR")
-            for a in data.alerts
+            not a.dismissed and a.level in ("CRITICAL", "ERROR") for a in data.alerts
         ),
     ),
     TrueNASBinarySensorEntityDescription(
@@ -49,9 +48,7 @@ SYSTEM_BINARY_SENSORS: tuple[TrueNASBinarySensorEntityDescription, ...] = (
         device_class=BinarySensorDeviceClass.UPDATE,
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:update",
-        value_fn=lambda data: data.update_info.available
-        if data.update_info
-        else None,
+        value_fn=lambda data: data.update_info.available if data.update_info else None,
     ),
 )
 
@@ -72,17 +69,13 @@ async def async_setup_entry(
     # Pool health
     for pool in coordinator.data.pools:
         entities.append(
-            TrueNASBinarySensor(
-                coordinator, _pool_problem_desc(pool.name), DEVICE_KEY_STORAGE
-            )
+            TrueNASBinarySensor(coordinator, _pool_problem_desc(pool.name), DEVICE_KEY_STORAGE)
         )
 
     # Disk SMART health
     for disk in coordinator.data.disks:
         entities.append(
-            TrueNASBinarySensor(
-                coordinator, _disk_smart_desc(disk.name), DEVICE_KEY_STORAGE
-            )
+            TrueNASBinarySensor(coordinator, _disk_smart_desc(disk.name), DEVICE_KEY_STORAGE)
         )
 
     async_add_entities(entities)
@@ -99,15 +92,15 @@ def _pool_problem_desc(pool_name: str) -> TrueNASBinarySensorEntityDescription:
         name=f"{pool_name} problem",
         device_class=BinarySensorDeviceClass.PROBLEM,
         icon="mdi:database-check",
-        value_fn=lambda data: not p.healthy
-        if (p := _find_pool(data))
-        else None,
-        extra_attrs_fn=lambda data: {
-            "status": p.status,
-            "warning": p.warning,
-        }
-        if (p := _find_pool(data))
-        else {},
+        value_fn=lambda data: not p.healthy if (p := _find_pool(data)) else None,
+        extra_attrs_fn=lambda data: (
+            {
+                "status": p.status,
+                "warning": p.warning,
+            }
+            if (p := _find_pool(data))
+            else {}
+        ),
     )
 
 

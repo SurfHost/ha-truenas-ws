@@ -59,9 +59,7 @@ def _parse_update_status(result: Any) -> UpdateInfo:
 
     An update is available when ``status.new_version`` is not null.
     """
-    empty = UpdateInfo(
-        available=False, version=None, changelog=None, current_version=None
-    )
+    empty = UpdateInfo(available=False, version=None, changelog=None, current_version=None)
     if not isinstance(result, dict):
         return empty
 
@@ -181,9 +179,7 @@ class TrueNASWebSocketClient:
                     last_err = err
                     await self._close_ws()
 
-            raise TrueNASConnectionError(
-                f"Cannot connect to {self._host}: {last_err}"
-            )
+            raise TrueNASConnectionError(f"Cannot connect to {self._host}: {last_err}")
 
     async def disconnect(self) -> None:
         """Disconnect from TrueNAS."""
@@ -205,28 +201,20 @@ class TrueNASWebSocketClient:
 
         for future in self._pending.values():
             if not future.done():
-                future.set_exception(
-                    TrueNASConnectionError("WebSocket disconnected")
-                )
+                future.set_exception(TrueNASConnectionError("WebSocket disconnected"))
         self._pending.clear()
 
     async def _authenticate(self) -> None:
         """Authenticate with the API key."""
         try:
-            result = await self._send_request(
-                "auth.login_with_api_key", [self._api_key]
-            )
+            result = await self._send_request("auth.login_with_api_key", [self._api_key])
         except TrueNASAPIError as err:
-            raise TrueNASAuthenticationError(
-                f"Authentication failed: {err}"
-            ) from err
+            raise TrueNASAuthenticationError(f"Authentication failed: {err}") from err
 
         if result is not True:
             raise TrueNASAuthenticationError("Authentication failed: invalid API key")
 
-    async def _send_request(
-        self, method: str, params: list[Any] | None = None
-    ) -> Any:
+    async def _send_request(self, method: str, params: list[Any] | None = None) -> Any:
         """Send a JSON-RPC 2.0 request and wait for the response."""
         if not self._connected or self._ws is None or self._ws.closed:
             raise TrueNASConnectionError("Not connected")
@@ -256,9 +244,7 @@ class TrueNASWebSocketClient:
             return await asyncio.wait_for(future, timeout=REQUEST_TIMEOUT)
         except TimeoutError:
             self._pending.pop(request_id, None)
-            raise TrueNASTimeoutError(
-                f"Timeout waiting for response to {method}"
-            ) from None
+            raise TrueNASTimeoutError(f"Timeout waiting for response to {method}") from None
 
     async def _listen(self) -> None:
         """Listen for incoming WebSocket messages."""
@@ -284,9 +270,7 @@ class TrueNASWebSocketClient:
             self._connected = False
             for future in self._pending.values():
                 if not future.done():
-                    future.set_exception(
-                        TrueNASConnectionError("WebSocket disconnected")
-                    )
+                    future.set_exception(TrueNASConnectionError("WebSocket disconnected"))
             self._pending.clear()
 
     def _handle_message(self, data: dict[str, Any]) -> None:
@@ -300,10 +284,7 @@ class TrueNASWebSocketClient:
 
         if "error" in data:
             error = data["error"]
-            err_msg = (
-                error.get("message", str(error)) if isinstance(error, dict)
-                else str(error)
-            )
+            err_msg = error.get("message", str(error)) if isinstance(error, dict) else str(error)
             future.set_exception(TrueNASAPIError(err_msg))
         else:
             future.set_result(data.get("result"))
@@ -363,16 +344,12 @@ class TrueNASWebSocketClient:
             if isinstance(virtual_mem, dict):
                 mem_total = int(virtual_mem.get("total", 0))
                 mem_used = int(virtual_mem.get("used", 0))
-                mem_free = int(
-                    virtual_mem.get("available") or virtual_mem.get("free") or 0
-                )
+                mem_free = int(virtual_mem.get("available") or virtual_mem.get("free") or 0)
 
             mem_raw = result.get("memory", {})
             if isinstance(mem_raw, dict):
                 if mem_total == 0:
-                    mem_total = int(
-                        mem_raw.get("physmem") or mem_raw.get("total") or 0
-                    )
+                    mem_total = int(mem_raw.get("physmem") or mem_raw.get("total") or 0)
                 if mem_used == 0:
                     mem_used = int(mem_raw.get("used", 0))
                 if mem_free == 0:
@@ -410,9 +387,7 @@ class TrueNASWebSocketClient:
                 cores = int(sysinfo.get("cores", 1)) or 1
                 loadavg = sysinfo.get("loadavg") or []
                 if loadavg:
-                    cpu_usage = min(
-                        round(float(loadavg[0]) / cores * 100, 1), 100.0
-                    )
+                    cpu_usage = min(round(float(loadavg[0]) / cores * 100, 1), 100.0)
 
         # Last-ditch memory fallback: reporting.get_data(memory)
         # (on some SCALE builds realtime doesn't expose used/free).
@@ -427,11 +402,7 @@ class TrueNASWebSocketClient:
         if mem_total > 0 and mem_free > 0 and mem_used == 0:
             mem_used = mem_total - mem_free
 
-        mem_pct = (
-            round(mem_used / mem_total * 100, 1)
-            if mem_total > 0 and mem_used > 0
-            else 0.0
-        )
+        mem_pct = round(mem_used / mem_total * 100, 1) if mem_total > 0 and mem_used > 0 else 0.0
 
         # ARC size from reporting graph if realtime didn't provide it
         if arc_size == 0:
@@ -493,14 +464,10 @@ class TrueNASWebSocketClient:
 
     async def get_disks(self) -> list[DiskInfo]:
         """Get disk information."""
-        result = await self._send_request(
-            "disk.query", [[], {"extra": {"pools": True}}]
-        )
+        result = await self._send_request("disk.query", [[], {"extra": {"pools": True}}])
         return [DiskInfo.from_api(d) for d in result]
 
-    async def get_disk_temperatures(
-        self, disk_names: list[str]
-    ) -> dict[str, int | None]:
+    async def get_disk_temperatures(self, disk_names: list[str]) -> dict[str, int | None]:
         """Get disk temperatures keyed by disk name.
 
         ``disk.temperatures`` requires a list of disk names — without it
@@ -515,9 +482,7 @@ class TrueNASWebSocketClient:
             return {}
         return dict(result) if isinstance(result, dict) else {}
 
-    async def get_disk_smart(
-        self, disk_names: list[str]
-    ) -> dict[str, DiskSmartInfo]:
+    async def get_disk_smart(self, disk_names: list[str]) -> dict[str, DiskSmartInfo]:
         """Get SMART self-test verdicts keyed by disk name.
 
         Uses ``smart.test.results``. The endpoint and its response shape
@@ -527,9 +492,7 @@ class TrueNASWebSocketClient:
         if not disk_names:
             return {}
         try:
-            result = await self._send_request(
-                "smart.test.results", [[["disk", "in", disk_names]]]
-            )
+            result = await self._send_request("smart.test.results", [[["disk", "in", disk_names]]])
         except (TrueNASAPIError, TrueNASTimeoutError):
             return {}
 
@@ -550,9 +513,7 @@ class TrueNASWebSocketClient:
                     continue
                 passed = status == "SUCCESS"
                 break
-            smart[disk] = DiskSmartInfo(
-                disk_name=disk, passed=passed, temperature=None
-            )
+            smart[disk] = DiskSmartInfo(disk_name=disk, passed=passed, temperature=None)
         return smart
 
     async def get_pools(self) -> list[PoolInfo]:
@@ -657,9 +618,7 @@ class TrueNASWebSocketClient:
             result = await self._send_request("update.status")
         except TrueNASAPIError as err:
             _LOGGER.debug("update.status failed: %s", err)
-            return UpdateInfo(
-                available=False, version=None, changelog=None, current_version=None
-            )
+            return UpdateInfo(available=False, version=None, changelog=None, current_version=None)
         _LOGGER.debug("update.status response: %s", result)
         return _parse_update_status(result)
 
@@ -707,9 +666,7 @@ class TrueNASWebSocketClient:
             raise TrueNASConnectionError("Not connected")
 
         # Expected to fail — the system disconnects as it reboots/shuts down
-        with contextlib.suppress(
-            TrueNASConnectionError, TrueNASTimeoutError, TimeoutError
-        ):
+        with contextlib.suppress(TrueNASConnectionError, TrueNASTimeoutError, TimeoutError):
             await asyncio.wait_for(
                 self._send_request(method, ["Home Assistant"]),
                 timeout=10.0,
@@ -732,9 +689,7 @@ class TrueNASWebSocketClient:
         if not self._connected or self._ws is None or self._ws.closed:
             raise TrueNASConnectionError("Not connected")
 
-        with contextlib.suppress(
-            TrueNASConnectionError, TrueNASTimeoutError, TimeoutError
-        ):
+        with contextlib.suppress(TrueNASConnectionError, TrueNASTimeoutError, TimeoutError):
             await asyncio.wait_for(
                 self._send_request("update.run", [{"reboot": True}]),
                 timeout=30.0,

@@ -407,8 +407,7 @@ class AppInfo:
             state=data.get("state", "UNKNOWN"),
             version=data.get("version", ""),
             human_version=data.get("human_version", data.get("version", "")),
-            latest_version=data.get("latest_version")
-            or metadata.get("latest_version"),
+            latest_version=data.get("latest_version") or metadata.get("latest_version"),
             upgrade_available=bool(data.get("upgrade_available", False)),
             metadata=metadata,
         )
@@ -504,9 +503,11 @@ class SnapshotTask:
         state_data = data.get("state", {})
         if isinstance(state_data, dict):
             state = state_data.get("state", "UNKNOWN")
-            last_run = state_data.get("datetime", {}).get("$date") if isinstance(
-                state_data.get("datetime"), dict
-            ) else state_data.get("datetime")
+            last_run = (
+                state_data.get("datetime", {}).get("$date")
+                if isinstance(state_data.get("datetime"), dict)
+                else state_data.get("datetime")
+            )
 
         return cls(
             id=int(data.get("id", 0)),

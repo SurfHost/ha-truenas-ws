@@ -29,9 +29,7 @@ async def async_setup_entry(
     # Dataset snapshot buttons
     for dataset in coordinator.data.datasets:
         if dataset.type == "FILESYSTEM":
-            entities.append(
-                TrueNASSnapshotButton(coordinator, dataset.id)
-            )
+            entities.append(TrueNASSnapshotButton(coordinator, dataset.id))
 
     async_add_entities(entities)
 
