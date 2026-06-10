@@ -121,6 +121,7 @@ class TrueNASWebSocketClient:
         self._listen_task: asyncio.Task[None] | None = None
         self._connected = False
         self._connect_lock = asyncio.Lock()
+        self._smart_supported: bool | None = None
 
     @property
     def connected(self) -> bool:
@@ -485,16 +486,25 @@ class TrueNASWebSocketClient:
     async def get_disk_smart(self, disk_names: list[str]) -> dict[str, DiskSmartInfo]:
         """Get SMART self-test verdicts keyed by disk name.
 
-        Uses ``smart.test.results``. The endpoint and its response shape
-        have varied across SCALE releases, so parse defensively and
-        degrade to an empty dict (sensors show unknown) when unavailable.
+        Uses ``smart.test.results``, which TrueNAS removed entirely in
+        25.10 (the whole smart.* namespace is gone). When the method is
+        unavailable, remember that and return an empty dict — the disk
+        problem sensors then fall back to alert-based health.
         """
-        if not disk_names:
+        if not disk_names or self._smart_supported is False:
             return {}
         try:
             result = await self._send_request("smart.test.results", [[["disk", "in", disk_names]]])
-        except (TrueNASAPIError, TrueNASTimeoutError):
+        except TrueNASTimeoutError:
             return {}
+        except TrueNASAPIError as err:
+            self._smart_supported = False
+            _LOGGER.debug(
+                "smart.test.results unavailable (%s); disk problem sensors fall back to alerts",
+                err,
+            )
+            return {}
+        self._smart_supported = True
 
         smart: dict[str, DiskSmartInfo] = {}
         if not isinstance(result, list):

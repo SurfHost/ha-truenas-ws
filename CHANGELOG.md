@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.1] - 2026-06-10
+
+### Fixed
+
+- **Disk problem sensors no longer stuck on Unknown with TrueNAS 25.10+.**
+  TrueNAS 25.10 (Goldeye) removed the entire `smart.*` API namespace, so
+  the SMART self-test query added in 0.6.0 can never return data there.
+  The sensors now fall back to active TrueNAS alerts that reference the
+  disk: OK means TrueNAS reports no issue for that disk. On systems that
+  still expose `smart.test.results` (≤ 25.04), real self-test verdicts
+  are used first. The unsupported endpoint is only probed once per
+  session instead of every refresh cycle.
+
 ## [0.6.0] - 2026-06-10
 
 ### Security

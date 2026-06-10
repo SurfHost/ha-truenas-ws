@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -105,18 +106,28 @@ def _pool_problem_desc(pool_name: str) -> TrueNASBinarySensorEntityDescription:
 
 
 def _disk_smart_desc(disk_name: str) -> TrueNASBinarySensorEntityDescription:
-    """Create the SMART problem binary sensor description for a disk."""
+    """Create the problem binary sensor description for a disk.
+
+    Prefers SMART self-test verdicts where the API still exists (TrueNAS
+    removed the entire smart.* namespace in 25.10). Otherwise falls back
+    to active alerts that reference the disk, so the sensor reports OK
+    when TrueNAS itself reports no issues.
+    """
+    name_re = re.compile(rf"\b{re.escape(disk_name)}\b")
+
+    def _value(data: TrueNASData) -> bool:
+        smart = data.disk_smart.get(disk_name)
+        if smart is not None and smart.passed is not None:
+            return not smart.passed
+        return any(name_re.search(a.message) for a in data.alerts if not a.dismissed)
+
     return TrueNASBinarySensorEntityDescription(
         key=f"disk_{disk_name}_smart_healthy",
         name=f"{disk_name} problem",
         device_class=BinarySensorDeviceClass.PROBLEM,
         icon="mdi:harddisk",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: (
-            None
-            if (s := data.disk_smart.get(disk_name)) is None or s.passed is None
-            else not s.passed
-        ),
+        value_fn=_value,
     )
 
 
