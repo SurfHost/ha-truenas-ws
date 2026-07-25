@@ -9,7 +9,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import TrueNASDataUpdateCoordinator
 
-# Group device keys — all entities of the same type go under one device
+# Group device keys > all entities of the same type go under one device
 DEVICE_KEY_SYSTEM = "system"
 DEVICE_KEY_STORAGE = "storage"
 DEVICE_KEY_APPS = "apps"

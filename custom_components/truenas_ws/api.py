@@ -163,7 +163,7 @@ class TrueNASWebSocketClient:
                     await self._authenticate()
                     return
                 except TrueNASAuthenticationError:
-                    # Credentials are wrong — no point trying other URLs
+                    # Credentials are wrong > no point trying other URLs
                     await self._close_ws()
                     raise
                 except (
@@ -172,7 +172,7 @@ class TrueNASWebSocketClient:
                     TimeoutError,
                     OSError,
                     # Raised by _authenticate() when the request fails or
-                    # times out — must clean up the ws + listen task too.
+                    # times out > must clean up the ws + listen task too.
                     TrueNASConnectionError,
                     TrueNASTimeoutError,
                 ) as err:
@@ -375,7 +375,7 @@ class TrueNASWebSocketClient:
             if isinstance(cpu_temp_raw, (int, float)):
                 cpu_temp = float(cpu_temp_raw)
 
-        # Always fetch system.info — supplies total memory, and gives us
+        # Always fetch system.info > supplies total memory, and gives us
         # loadavg+cores for the CPU usage fallback.
         try:
             sysinfo = await self._send_request("system.info")
@@ -471,7 +471,7 @@ class TrueNASWebSocketClient:
     async def get_disk_temperatures(self, disk_names: list[str]) -> dict[str, int | None]:
         """Get disk temperatures keyed by disk name.
 
-        ``disk.temperatures`` requires a list of disk names — without it
+        ``disk.temperatures`` requires a list of disk names > without it
         the method rejects the call. Results are cached by TrueNAS for
         up to 5 minutes.
         """
@@ -488,7 +488,7 @@ class TrueNASWebSocketClient:
 
         Uses ``smart.test.results``, which TrueNAS removed entirely in
         25.10 (the whole smart.* namespace is gone). When the method is
-        unavailable, remember that and return an empty dict — the disk
+        unavailable, remember that and return an empty dict > the disk
         problem sensors then fall back to alert-based health.
         """
         if not disk_names or self._smart_supported is False:
@@ -671,11 +671,11 @@ class TrueNASWebSocketClient:
         await self._send_system_command("system.shutdown")
 
     async def _send_system_command(self, method: str) -> None:
-        """Send reboot/shutdown — tolerate the disconnect that follows."""
+        """Send reboot/shutdown > tolerate the disconnect that follows."""
         if not self._connected or self._ws is None or self._ws.closed:
             raise TrueNASConnectionError("Not connected")
 
-        # Expected to fail — the system disconnects as it reboots/shuts down
+        # Expected to fail > the system disconnects as it reboots/shuts down
         with contextlib.suppress(TrueNASConnectionError, TrueNASTimeoutError, TimeoutError):
             await asyncio.wait_for(
                 self._send_request(method, ["Home Assistant"]),
@@ -692,7 +692,7 @@ class TrueNASWebSocketClient:
     async def install_system_update(self) -> None:
         """Download, apply and reboot for the pending system update.
 
-        Uses ``update.run`` — TrueNAS SCALE 25+ job that installs the latest
+        Uses ``update.run`` > TrueNAS SCALE 25+ job that installs the latest
         version from the current update profile. The WebSocket will
         disconnect as the system reboots.
         """

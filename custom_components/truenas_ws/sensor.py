@@ -238,7 +238,7 @@ async def async_setup_entry(
         for desc in _vm_sensors(vm.name, vm.id):
             entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_VMS))
 
-    # Task sensors — all grouped under Tasks device
+    # Task sensors > all grouped under Tasks device
     for repl_task in coordinator.data.replication_tasks:
         for desc in _replication_sensors(repl_task.id, repl_task.name):
             entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_TASKS))

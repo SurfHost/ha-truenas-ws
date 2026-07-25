@@ -84,7 +84,7 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
         now = time.monotonic()
 
         # After a reconnect (e.g. a system reboot following an update),
-        # the installed version may have changed — force a refresh of
+        # the installed version may have changed > force a refresh of
         # system info and the update check on the next tier below.
         if reconnected:
             self._last_system_info = 0

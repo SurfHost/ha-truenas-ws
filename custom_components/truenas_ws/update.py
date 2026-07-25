@@ -114,7 +114,7 @@ class TrueNASSystemUpdateEntity(TrueNASEntity, UpdateEntity):
             self._installing = False
             self.async_write_ha_state()
             raise
-        # _installing stays True — cleared automatically when the
+        # _installing stays True > cleared automatically when the
         # coordinator reconnects after the reboot and installed_version
         # matches latest_version.
 

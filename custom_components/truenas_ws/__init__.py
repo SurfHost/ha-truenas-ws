@@ -72,7 +72,7 @@ def _async_cleanup_stale_entities(hass: HomeAssistant, entry: TrueNASConfigEntry
         f"{entry_id}_cloudsync_",
         # All-in-one per-app device (reverted in v0.3.9)
         f"{entry_id}_app:",
-        # Per-app update device (reverted in v0.5.3 — back under shared Apps)
+        # Per-app update device (reverted in v0.5.3 > back under shared Apps)
         f"{entry_id}_app_update:",
     )
     for entity in er.async_entries_for_config_entry(ent_reg, entry_id):
