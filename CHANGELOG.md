@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.2] - 2026-07-25
+
+### Fixed
+- **The declared Home Assistant minimum was impossible.** `hacs.json`, `pyproject.toml` and the README claimed 2024.3.0, but this integration uses PEP 695 `type` statements and generic method syntax, which need Python 3.12, and `entry.runtime_data`, which did not exist until HA 2024.6. hassfest only checks that the value parses, not that it is true, so nothing caught it. Now declared consistently across all three files.
+- **`iot_class` corrected from `local_push` to `local_polling`.** The coordinator polls the JSON-RPC websocket on a timer rather than receiving pushed state.
+- `pyproject.toml` said `0.1.0` while `manifest.json` said `0.6.1`. The two are synced, and the release gate now compares the tag against both.
+
+### Added
+- MIT `LICENSE`, which the repository had never shipped.
+- CI now runs `ruff check`, `ruff format --check` and strict `mypy`. Previously the workflow validated HACS and hassfest metadata only, so no line of Python was ever executed by CI.
+
 ## [0.6.1] - 2026-06-10
 
 ### Fixed
