@@ -68,13 +68,23 @@ jobs:
       # Release discipline: the tag and manifest.json have drifted apart before
       # (manifest said 0.6.1 while the newest tag was still v0.6.0), and HACS
       # serves the manifest version to users, so a mismatch ships a wrong version.
-      - name: Tag must match manifest.json version
+      - name: Tag must match manifest.json and pyproject.toml versions
         run: |
           tag_version="${GITHUB_REF_NAME#v}"
           manifest_version="$(jq -r .version custom_components/truenas_ws/manifest.json)"
+          pyproject_version="$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
           echo "git tag: ${GITHUB_REF_NAME} (version ${tag_version})"
           echo "manifest.json: ${manifest_version}"
+          echo "pyproject.toml: ${pyproject_version}"
+          status=0
           if [ "${tag_version}" != "${manifest_version}" ]; then
             echo "::error::Tag ${GITHUB_REF_NAME} does not match manifest.json version ${manifest_version}"
-            exit 1
+            status=1
           fi
+          # pyproject had drifted to 0.1.0 while the manifest said 0.6.1, so it is
+          # checked here too rather than left to go stale again unnoticed.
+          if [ "${tag_version}" != "${pyproject_version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match pyproject.toml version ${pyproject_version}"
+            status=1
+          fi
+          exit "${status}"

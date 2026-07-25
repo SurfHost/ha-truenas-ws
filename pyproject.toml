@@ -1,6 +1,8 @@
 [project]
 name = "ha-truenas"
-version = "0.1.0"
+# Kept in step with custom_components/truenas_ws/manifest.json. The release-gate
+# job in CI fails a tag push when the two disagree.
+version = "0.6.1"
 description = "TrueNAS integration for Home Assistant using JSON-RPC 2.0 WebSocket API"
 requires-python = ">=3.13"
 license = "MIT"
