@@ -6,7 +6,11 @@ requires-python = ">=3.13"
 license = "MIT"
 
 dependencies = [
-    "homeassistant>=2024.3.0",
+    # 2024.6.0 is the real floor, not a guess: entry.runtime_data and the generic
+    # ConfigEntry[T] this package relies on only exist from 2024.6 onward, and the
+    # PEP 695 "type" / "def f[T]()" syntax in coordinator.py needs Python 3.12,
+    # which HA only started requiring in 2024.4.
+    "homeassistant>=2024.6.0",
 ]
 
 [project.optional-dependencies]
@@ -27,7 +31,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv]
-# HA custom component — nothing to build/install as a wheel
+# HA custom component > nothing to build/install as a wheel
 package = false
 
 [tool.ruff]

@@ -3,6 +3,9 @@ name: Validate
 on:
   push:
     branches: [main]
+    # Tags are built too, because release-gate below only has something to check
+    # when the ref is a tag.
+    tags: ["v*"]
   pull_request:
 
 jobs:
@@ -11,7 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: hacs/action@main
+      # Pinned to a SHA instead of @main so an upstream change cannot silently
+      # alter what "validated" means for an existing release.
+      - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main @ 2026-06-08
         with:
           category: integration
 
@@ -20,4 +25,56 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: home-assistant/actions/hassfest@master
+      - uses: home-assistant/actions/hassfest@e3fb68ebda13d88a0d695082f471ba2c83d025fb # master @ 2026-07-21
+
+  lint:
+    name: Lint (ruff + mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # uv reads requires-python from pyproject.toml and fetches that interpreter
+      # itself, so the Python version is never configured in two places.
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      # No rule or strictness flags are passed on purpose: ruff and mypy are both
+      # configured in pyproject.toml, so CI and a local run cannot disagree.
+      - name: ruff check
+        run: uv run ruff check custom_components
+
+      - name: ruff format --check
+        run: uv run ruff format --check custom_components
+
+      - name: mypy
+        run: uv run mypy custom_components
+
+  # There is deliberately no pytest job: this repo has no tests/ directory yet.
+  # Add the job together with the first real test, not before it.
+
+  release-gate:
+    # Gate on the other jobs so a tag that fails lint or hassfest cannot
+    # look like a clean release in the checks list.
+    needs: [hacs, hassfest, lint]
+    name: Release gate
+    # Tag pushes only. On branch pushes and pull requests there is no version to
+    # compare against.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Release discipline: the tag and manifest.json have drifted apart before
+      # (manifest said 0.6.1 while the newest tag was still v0.6.0), and HACS
+      # serves the manifest version to users, so a mismatch ships a wrong version.
+      - name: Tag must match manifest.json version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          manifest_version="$(jq -r .version custom_components/truenas_ws/manifest.json)"
+          echo "git tag: ${GITHUB_REF_NAME} (version ${tag_version})"
+          echo "manifest.json: ${manifest_version}"
+          if [ "${tag_version}" != "${manifest_version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match manifest.json version ${manifest_version}"
+            exit 1
+          fi

@@ -1810,7 +1810,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "codespell", marker = "extra == 'dev'" },
-    { name = "homeassistant", specifier = ">=2024.3.0" },
+    { name = "homeassistant", specifier = ">=2024.6.0" },
     { name = "homeassistant-stubs", marker = "extra == 'dev'" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "pre-commit", marker = "extra == 'dev'" },

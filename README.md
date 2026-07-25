@@ -45,7 +45,7 @@ Custom Home Assistant integration for TrueNAS SCALE using the **JSON-RPC 2.0 Web
 Or manually:
 
 1. Open HACS in Home Assistant
-2. Click the three dots menu → **Custom repositories**
+2. Click the three dots menu > **Custom repositories**
 3. Add `SurfHost/ha-truenas-ws` with category **Integration**
 4. Search for "TrueNAS" and install
 5. Restart Home Assistant
@@ -62,8 +62,8 @@ Or manually:
 
 Or manually:
 
-1. In TrueNAS, go to **System → API Keys** and create a new API key
-2. In Home Assistant, go to **Settings → Integrations → Add Integration**
+1. In TrueNAS, go to **System > API Keys** and create a new API key
+2. In Home Assistant, go to **Settings > Integrations > Add Integration**
 3. Search for **TrueNAS**
 4. Enter your TrueNAS host/IP and API key
 5. Optionally disable SSL verification (for self-signed certificates)
@@ -71,18 +71,18 @@ Or manually:
 ### Options
 
 After setup, you can configure:
-- **Update interval**: 30–900 seconds (default: 120s)
+- **Update interval**: 30 > 900 seconds (default: 120s)
 
 ### System update entity & update profile
 
-The System update entity mirrors the **Update Profile** configured in TrueNAS (Settings → Update). If the profile is set to a pre-release track (`Developer`/`Nightly`), the entity will offer beta versions when you press **Install**. To avoid beta upgrades, set the profile to `Mission Critical` or `Release` in TrueNAS before installing updates from Home Assistant.
+The System update entity mirrors the **Update Profile** configured in TrueNAS (Settings > Update). If the profile is set to a pre-release track (`Developer`/`Nightly`), the entity will offer beta versions when you press **Install**. To avoid beta upgrades, set the profile to `Mission Critical` or `Release` in TrueNAS before installing updates from Home Assistant.
 
 The current profile is exposed as an attribute on the System update entity so you can see which track you're on.
 
 ## Requirements
 
 - **TrueNAS SCALE 25.04 or newer** (uses the JSON-RPC 2.0 API at `/api/current`)
-- Home Assistant 2024.3.0 or newer
+- Home Assistant 2024.6.0 or newer (needs `entry.runtime_data`, plus the Python 3.12 floor HA adopted in 2024.4)
 - A TrueNAS API key
 
 ## Architecture
@@ -90,5 +90,5 @@ The current profile is exposed as an attribute on the System update entity so yo
 This integration uses TrueNAS's **JSON-RPC 2.0 WebSocket API** (`wss://{host}/api/current`) instead of the deprecated REST API. It maintains a persistent WebSocket connection with:
 
 - Multi-frequency polling (30s for storage, 60s for alerts, 5min for tasks, 12h for system info)
-- Partial failure tolerance — if one API call fails, cached data is preserved
+- Partial failure tolerance > if one API call fails, cached data is preserved
 - Automatic reconnection with exponential backoff
