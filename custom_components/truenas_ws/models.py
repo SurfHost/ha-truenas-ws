@@ -2,8 +2,90 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from typing import Any, Self
+
+from homeassistant.util import dt as dt_util
+
+# Epoch values above this are milliseconds, not seconds: as seconds this is
+# already the year 5138, so no real timestamp can land above it.
+_EPOCH_MILLIS_THRESHOLD = 1e11
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    """Parse a TrueNAS timestamp into an aware UTC datetime.
+
+    The middleware encodes datetimes as ``{"$date": <epoch milliseconds>}``.
+    Bare epoch numbers (seconds or milliseconds) and ISO 8601 strings are
+    also accepted, because different endpoints and releases disagree.
+    Returns ``None`` when the value is missing or unusable.
+    """
+    if isinstance(value, dict):
+        value = value.get("$date")
+    if value is None or isinstance(value, bool):
+        return None
+
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            try:
+                value = float(text)
+            except ValueError:
+                return None
+        else:
+            # A naive timestamp from TrueNAS is UTC.
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=UTC)
+            return parsed.astimezone(UTC)
+
+    if not isinstance(value, (int, float)):
+        return None
+
+    try:
+        # An int too large for a float raises here, not in fromtimestamp.
+        seconds = value / 1000 if abs(value) > _EPOCH_MILLIS_THRESHOLD else float(value)
+        if seconds <= 0:
+            return None
+        return datetime.fromtimestamp(seconds, tz=UTC)
+    except (OSError, OverflowError, ValueError):
+        return None
+
+
+def _parse_int(value: Any) -> int:
+    """Parse an integer that the API may hand over as a float or string."""
+    if isinstance(value, bool) or value is None:
+        return 0
+    try:
+        return int(float(value))
+    except (OverflowError, TypeError, ValueError):
+        return 0
+
+
+def _parse_float(value: Any) -> float:
+    """Parse a float that the API may omit, null out or hand over as a string."""
+    if isinstance(value, bool) or value is None:
+        return 0.0
+    try:
+        parsed = float(value)
+    except (OverflowError, TypeError, ValueError):
+        return 0.0
+    # NaN poisons every comparison downstream and inf renders as "inf".
+    return parsed if math.isfinite(parsed) else 0.0
+
+
+def _parse_loadavg(value: Any) -> tuple[float, float, float]:
+    """Parse the three load averages, tolerating a short or absent list."""
+    if not isinstance(value, (list, tuple)):
+        return (0.0, 0.0, 0.0)
+    values = [_parse_float(v) for v in value[:3]]
+    values += [0.0] * (3 - len(values))
+    return (values[0], values[1], values[2])
 
 
 def _parse_fragmentation(value: Any) -> int:
@@ -29,6 +111,7 @@ class SystemInfo:
     hostname: str
     version: str
     uptime_seconds: int
+    boot_time: datetime | None
     cpu_model: str
     cpu_cores: int
     physical_cores: int
@@ -41,18 +124,29 @@ class SystemInfo:
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> Self:
         """Create from API response."""
-        loadavg = data.get("loadavg") or [0.0, 0.0, 0.0]
+        load_1, load_5, load_15 = _parse_loadavg(data.get("loadavg"))
+        uptime_seconds = _parse_int(data.get("uptime_seconds"))
+
+        # Boot time is resolved here, when the response arrives, and never
+        # later. Deriving it at state-read time from a cached uptime is what
+        # made the uptime sensor crawl forward with the wall clock instead of
+        # standing still at the moment the NAS booted.
+        boot_time = _parse_datetime(data.get("boottime"))
+        if boot_time is None and uptime_seconds > 0:
+            boot_time = dt_util.utcnow() - timedelta(seconds=uptime_seconds)
+
         return cls(
             hostname=data.get("hostname", ""),
             version=data.get("version", ""),
-            uptime_seconds=int(data.get("uptime_seconds", 0)),
+            uptime_seconds=uptime_seconds,
+            boot_time=boot_time,
             cpu_model=data.get("model", ""),
-            cpu_cores=int(data.get("cores", 0)),
-            physical_cores=int(data.get("physical_cores", 0)),
-            memory_total_bytes=int(data.get("physmem", 0)),
-            load_avg_1=float(loadavg[0]),
-            load_avg_5=float(loadavg[1]),
-            load_avg_15=float(loadavg[2]),
+            cpu_cores=_parse_int(data.get("cores")),
+            physical_cores=_parse_int(data.get("physical_cores")),
+            memory_total_bytes=_parse_int(data.get("physmem")),
+            load_avg_1=load_1,
+            load_avg_5=load_5,
+            load_avg_15=load_15,
             timezone=data.get("timezone", "UTC"),
         )
 
@@ -451,7 +545,7 @@ class ReplicationTask:
     id: int
     name: str
     state: str
-    last_run: str | None
+    last_run: datetime | None
     enabled: bool
     direction: str
     source_datasets: list[str]
@@ -462,10 +556,12 @@ class ReplicationTask:
         """Create from API response."""
         job = data.get("job")
         state = "UNKNOWN"
-        last_run: str | None = None
+        last_run: datetime | None = None
         if isinstance(job, dict):
             state = job.get("state", "UNKNOWN")
-            last_run = job.get("time_finished") or job.get("time_started")
+            last_run = _parse_datetime(job.get("time_finished")) or _parse_datetime(
+                job.get("time_started")
+            )
 
         return cls(
             id=int(data.get("id", 0)),
@@ -488,7 +584,7 @@ class SnapshotTask:
     id: int
     dataset: str
     state: str
-    last_run: str | None
+    last_run: datetime | None
     enabled: bool
     lifetime_value: int
     lifetime_unit: str
@@ -499,15 +595,11 @@ class SnapshotTask:
     def from_api(cls, data: dict[str, Any]) -> Self:
         """Create from API response."""
         state = "UNKNOWN"
-        last_run: str | None = None
+        last_run: datetime | None = None
         state_data = data.get("state", {})
         if isinstance(state_data, dict):
             state = state_data.get("state", "UNKNOWN")
-            last_run = (
-                state_data.get("datetime", {}).get("$date")
-                if isinstance(state_data.get("datetime"), dict)
-                else state_data.get("datetime")
-            )
+            last_run = _parse_datetime(state_data.get("datetime"))
 
         return cls(
             id=int(data.get("id", 0)),
@@ -529,7 +621,7 @@ class CloudSyncTask:
     id: int
     description: str
     state: str
-    last_run: str | None
+    last_run: datetime | None
     enabled: bool
     direction: str
     transfer_mode: str
@@ -540,10 +632,12 @@ class CloudSyncTask:
         """Create from API response."""
         job = data.get("job")
         state = "UNKNOWN"
-        last_run: str | None = None
+        last_run: datetime | None = None
         if isinstance(job, dict):
             state = job.get("state", "UNKNOWN")
-            last_run = job.get("time_finished") or job.get("time_started")
+            last_run = _parse_datetime(job.get("time_finished")) or _parse_datetime(
+                job.get("time_started")
+            )
 
         return cls(
             id=int(data.get("id", 0)),
@@ -566,7 +660,7 @@ class RsyncTask:
     remote_host: str
     remote_path: str
     state: str
-    last_run: str | None
+    last_run: datetime | None
     enabled: bool
     direction: str
     description: str
@@ -576,10 +670,12 @@ class RsyncTask:
         """Create from API response."""
         job = data.get("job")
         state = "UNKNOWN"
-        last_run: str | None = None
+        last_run: datetime | None = None
         if isinstance(job, dict):
             state = job.get("state", "UNKNOWN")
-            last_run = job.get("time_finished") or job.get("time_started")
+            last_run = _parse_datetime(job.get("time_finished")) or _parse_datetime(
+                job.get("time_started")
+            )
 
         return cls(
             id=int(data.get("id", 0)),
@@ -603,25 +699,18 @@ class Alert:
     message: str
     dismissed: bool
     klass: str
-    datetime_raw: str | None
+    raised_at: datetime | None
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> Self:
         """Create from API response."""
-        dt = data.get("datetime")
-        datetime_str: str | None = None
-        if isinstance(dt, dict):
-            datetime_str = dt.get("$date")
-        elif isinstance(dt, str):
-            datetime_str = dt
-
         return cls(
             id=data.get("id", data.get("uuid", "")),
             level=data.get("level", "INFO"),
             message=data.get("formatted", data.get("message", "")),
             dismissed=bool(data.get("dismissed", False)),
             klass=data.get("klass", ""),
-            datetime_raw=datetime_str,
+            raised_at=_parse_datetime(data.get("datetime")),
         )
 
 

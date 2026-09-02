@@ -38,7 +38,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrueNASConfigEntry) -> b
     )
 
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-    coordinator = TrueNASDataUpdateCoordinator(hass, client, scan_interval)
+    coordinator = TrueNASDataUpdateCoordinator(hass, entry, client, scan_interval)
 
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator

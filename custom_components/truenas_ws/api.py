@@ -295,15 +295,20 @@ class TrueNASWebSocketClient:
     async def get_system_info(self) -> SystemInfo:
         """Get system information."""
         result = await self._send_request("system.info")
+        if not isinstance(result, dict):
+            raise TrueNASAPIError(f"Unexpected system.info response: {type(result).__name__}")
         return SystemInfo.from_api(result)
 
-    async def get_system_stats(self) -> SystemStats:
+    async def get_system_stats(self, system_info: SystemInfo | None = None) -> SystemStats:
         """Get real-time system statistics.
 
         Primary source: ``reporting.realtime``. Fallbacks:
         - ``system.info`` for total memory + loadavg-derived CPU usage
         - ``reporting.get_data(memory)`` for used memory when realtime
           doesn't expose it (observed on some SCALE builds)
+
+        The coordinator already fetches ``system.info`` every cycle, so it
+        passes the parsed result in rather than making the same call twice.
         """
         cpu_usage = 0.0
         mem_total = 0
@@ -375,20 +380,21 @@ class TrueNASWebSocketClient:
             if isinstance(cpu_temp_raw, (int, float)):
                 cpu_temp = float(cpu_temp_raw)
 
-        # Always fetch system.info > supplies total memory, and gives us
-        # loadavg+cores for the CPU usage fallback.
-        try:
-            sysinfo = await self._send_request("system.info")
-        except (TrueNASAPIError, TrueNASTimeoutError):
-            sysinfo = None
-        if isinstance(sysinfo, dict):
+        # system.info supplies total memory, plus loadavg+cores for the CPU
+        # usage fallback. Only fetched here when the caller had none to give.
+        if system_info is None:
+            try:
+                sysinfo_raw = await self._send_request("system.info")
+            except (TrueNASAPIError, TrueNASTimeoutError):
+                sysinfo_raw = None
+            if isinstance(sysinfo_raw, dict):
+                system_info = SystemInfo.from_api(sysinfo_raw)
+        if system_info is not None:
             if mem_total == 0:
-                mem_total = int(sysinfo.get("physmem", 0))
+                mem_total = system_info.memory_total_bytes
             if cpu_usage == 0:
-                cores = int(sysinfo.get("cores", 1)) or 1
-                loadavg = sysinfo.get("loadavg") or []
-                if loadavg:
-                    cpu_usage = min(round(float(loadavg[0]) / cores * 100, 1), 100.0)
+                cores = system_info.cpu_cores or 1
+                cpu_usage = min(round(system_info.load_avg_1 / cores * 100, 1), 100.0)
 
         # Last-ditch memory fallback: reporting.get_data(memory)
         # (on some SCALE builds realtime doesn't expose used/free).

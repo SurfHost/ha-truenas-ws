@@ -1,5 +1,67 @@
 # Changelog
 
+## [0.7.0] - 2026-09-02
+
+### Fixed
+
+- **The uptime sensor never reported the real boot time.** It computed
+  `datetime.now() - uptime_seconds` every time Home Assistant read the state,
+  but `system.info` (which carries `uptime_seconds`) was only refreshed once
+  every 12 hours. The subtraction therefore used a frozen uptime against a
+  moving clock, so the reported boot time crawled forward in lockstep with the
+  wall clock and the sensor was stuck at "N minutes ago" forever, where N was
+  whatever the uptime happened to be when Home Assistant last connected. A NAS
+  up for 2 hours 57 minutes showed as booted 10 minutes ago, on every single
+  poll. Boot time is now resolved once, when the response arrives, from the
+  `boottime` field TrueNAS actually provides (falling back to a one-off
+  `uptime_seconds` subtraction), and the sensor simply reports it.
+- **The uptime sensor wrote a new state on every poll.** Being a timestamp
+  that changed every 2 minutes, it filled the recorder and turned its own
+  history graph into noise. The reported boot time is now held still unless it
+  moves by more than 60 seconds, which only a real reboot does.
+- **TrueNAS timestamps were stored as strings but held raw API payloads.**
+  `last_run` on replication, snapshot, cloud sync and rsync tasks was typed
+  `str | None` while actually receiving TrueNAS's `{"$date": <epoch millis>}`
+  dict, so those attributes showed a raw dict or a bare millisecond number
+  instead of a time. All of them are parsed into real datetimes now and
+  published as ISO 8601. The same applied to the alert timestamp, which was
+  parsed into a mistyped field that nothing ever read.
+- **A failing update check retried every 2 minutes.** It is a 30-second
+  blocking call, so a TrueNAS that cannot reach the update server stalled
+  every refresh. It keeps to its 12-hour tier now whether it succeeds or not.
+- **Forcing a refresh after a reconnect did nothing.** The reconnect handler
+  set the tier timer to `0` and relied on `now - 0 > 12h`, but `now` is
+  `time.monotonic()`, which only exceeds 12 hours once the Home Assistant host
+  itself has been up that long. On a freshly started Home Assistant the forced
+  refresh silently no-opped. It uses an explicit flag now.
+- **The system device kept advertising the TrueNAS version it was set up
+  with.** `device_info` is only read when entities are added, so a version
+  change after an upgrade never reached the device page until the config entry
+  was reloaded. A changed version is now pushed to the device registry.
+
+### Changed
+
+- `system.info` is fetched once per 2-minute cycle instead of once per 12
+  hours. It was already being requested every cycle inside `get_system_stats`
+  and thrown away, so this costs nothing: the payload is now fetched once and
+  shared, which is one fewer request per cycle than before. Load averages,
+  the installed version and the update entity's progress tracking are live as
+  a result, instead of up to 12 hours stale.
+- The `latest` active-alert attribute is now genuinely the five most recent
+  alerts rather than the first five the API happened to return, and each
+  carries the time it was raised.
+- `system.info` is parsed defensively now that it runs on every cycle: a
+  missing, short or non-numeric `loadavg`, an out-of-range number, or a reply
+  that is not a dict at all can no longer raise out of the refresh and take
+  every entity unavailable.
+- The coordinator is handed its config entry explicitly instead of picking it
+  up from Home Assistant's ambient setup context.
+
+### Removed
+
+- `_previous_network`, coordinator state for a throughput calculation that was
+  never written and never read.
+
 ## [0.6.2] - 2026-07-25
 
 ### Fixed

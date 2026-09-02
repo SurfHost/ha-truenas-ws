@@ -89,6 +89,7 @@ The current profile is exposed as an attribute on the System update entity so yo
 
 This integration uses TrueNAS's **JSON-RPC 2.0 WebSocket API** (`wss://{host}/api/current`) instead of the deprecated REST API. It maintains a persistent WebSocket connection with:
 
-- Multi-frequency polling (30s for storage, 60s for alerts, 5min for tasks, 12h for system info)
+- Multi-frequency polling (2 min for system info, stats, alerts, apps and VMs;
+  5 min for disks, pools, network and tasks; 15 min for datasets; 12 h for the update check)
 - Partial failure tolerance > if one API call fails, cached data is preserved
 - Automatic reconnection with exponential backoff

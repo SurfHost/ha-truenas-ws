@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -45,13 +45,24 @@ class TrueNASSensorEntityDescription(SensorEntityDescription):
 
 def _alert_attrs(data: TrueNASData) -> dict[str, Any]:
     """Summarize active alerts without bloating the recorder database."""
-    active = [a for a in data.alerts if not a.dismissed]
+    active = sorted(
+        (a for a in data.alerts if not a.dismissed),
+        key=lambda a: (a.raised_at is not None, a.raised_at),
+        reverse=True,
+    )
     return {
         "critical": sum(a.level == "CRITICAL" for a in active),
         "error": sum(a.level == "ERROR" for a in active),
         "warning": sum(a.level == "WARNING" for a in active),
         "info": sum(a.level == "INFO" for a in active),
-        "latest": [{"level": a.level, "message": a.message[:200]} for a in active[:5]],
+        "latest": [
+            {
+                "level": a.level,
+                "message": a.message[:200],
+                "raised_at": a.raised_at.isoformat() if a.raised_at else None,
+            }
+            for a in active[:5]
+        ],
     }
 
 
@@ -129,8 +140,9 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
             else None
         ),
     ),
-    # Load averages only refresh with system.info (every 12h), so long-term
-    # statistics would just repeat the same value hourly. Omit state_class.
+    # Load averages refresh on every poll along with the rest of system.info.
+    # state_class is still omitted: three near-identical curves in long-term
+    # statistics is noise, and the CPU usage sensor already carries the signal.
     TrueNASSensorEntityDescription(
         key="load_avg_1",
         translation_key="load_avg_1",
@@ -158,17 +170,17 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: round(data.system_info.load_avg_15, 2) if data.system_info else None,
     ),
+    # A TIMESTAMP sensor reports the moment the NAS booted, and that moment
+    # does not move while it stays up. It is resolved once per refresh in
+    # SystemInfo.from_api; computing it here from a cached uptime would make
+    # it track the wall clock instead ("x minutes ago", forever).
     TrueNASSensorEntityDescription(
         key="uptime",
         translation_key="uptime",
         name="Uptime",
         device_class=SensorDeviceClass.TIMESTAMP,
         icon="mdi:clock-outline",
-        value_fn=lambda data: (
-            (datetime.now(tz=UTC) - timedelta(seconds=data.system_info.uptime_seconds))
-            if data.system_info and data.system_info.uptime_seconds > 0
-            else None
-        ),
+        value_fn=lambda data: data.system_info.boot_time if data.system_info else None,
     ),
     TrueNASSensorEntityDescription(
         key="arc_size",
@@ -518,7 +530,7 @@ def _replication_sensors(
                 {
                     "name": t.name,
                     "direction": t.direction,
-                    "last_run": t.last_run,
+                    "last_run": t.last_run.isoformat() if t.last_run else None,
                     "enabled": t.enabled,
                 }
                 if (t := _find_task(data))
@@ -545,7 +557,7 @@ def _snapshot_task_sensors(
             extra_attrs_fn=lambda data: (
                 {
                     "dataset": t.dataset,
-                    "last_run": t.last_run,
+                    "last_run": t.last_run.isoformat() if t.last_run else None,
                     "enabled": t.enabled,
                     "recursive": t.recursive,
                 }
@@ -574,7 +586,7 @@ def _cloudsync_sensors(
                 {
                     "description": t.description,
                     "direction": t.direction,
-                    "last_run": t.last_run,
+                    "last_run": t.last_run.isoformat() if t.last_run else None,
                     "enabled": t.enabled,
                     "path": t.path,
                 }
@@ -605,7 +617,7 @@ def _rsync_sensors(task_id: int, path: str) -> tuple[TrueNASSensorEntityDescript
                     "remote_host": t.remote_host,
                     "remote_path": t.remote_path,
                     "direction": t.direction,
-                    "last_run": t.last_run,
+                    "last_run": t.last_run.isoformat() if t.last_run else None,
                     "enabled": t.enabled,
                     "description": t.description,
                 }
