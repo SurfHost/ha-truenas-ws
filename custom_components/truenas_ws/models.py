@@ -53,7 +53,7 @@ def _parse_datetime(value: Any) -> datetime | None:
         if seconds <= 0:
             return None
         return datetime.fromtimestamp(seconds, tz=UTC)
-    except (OSError, OverflowError, ValueError):
+    except OSError, OverflowError, ValueError:
         return None
 
 
@@ -63,7 +63,7 @@ def _parse_int(value: Any) -> int:
         return 0
     try:
         return int(float(value))
-    except (OverflowError, TypeError, ValueError):
+    except OverflowError, TypeError, ValueError:
         return 0
 
 
@@ -73,7 +73,7 @@ def _parse_float(value: Any) -> float:
         return 0.0
     try:
         parsed = float(value)
-    except (OverflowError, TypeError, ValueError):
+    except OverflowError, TypeError, ValueError:
         return 0.0
     # NaN poisons every comparison downstream and inf renders as "inf".
     return parsed if math.isfinite(parsed) else 0.0
@@ -100,7 +100,7 @@ def _parse_fragmentation(value: Any) -> int:
         return 0
     try:
         return int(str(value).rstrip("%"))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return 0
 
 
@@ -380,7 +380,7 @@ class DatasetInfo:
                 return default
             try:
                 return int(raw)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return default
 
         dataset_id = data.get("id", "")

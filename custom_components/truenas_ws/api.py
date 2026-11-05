@@ -321,7 +321,7 @@ class TrueNASWebSocketClient:
         # Primary source: reporting.realtime (SCALE live stats)
         try:
             result = await self._send_request("reporting.realtime")
-        except (TrueNASAPIError, TrueNASTimeoutError):
+        except TrueNASAPIError, TrueNASTimeoutError:
             result = None
 
         if isinstance(result, dict):
@@ -385,7 +385,7 @@ class TrueNASWebSocketClient:
         if system_info is None:
             try:
                 sysinfo_raw = await self._send_request("system.info")
-            except (TrueNASAPIError, TrueNASTimeoutError):
+            except TrueNASAPIError, TrueNASTimeoutError:
                 sysinfo_raw = None
             if isinstance(sysinfo_raw, dict):
                 system_info = SystemInfo.from_api(sysinfo_raw)
@@ -437,7 +437,7 @@ class TrueNASWebSocketClient:
                 "reporting.get_data",
                 [[{"name": graph_name}], {"start": now - 120, "end": now}],
             )
-        except (TrueNASAPIError, TrueNASTimeoutError):
+        except TrueNASAPIError, TrueNASTimeoutError:
             return 0
 
         if not isinstance(report, list) or not report:
@@ -449,14 +449,21 @@ class TrueNASWebSocketClient:
         return 0
 
     async def _fetch_avg_graph_value(self, graph_name: str) -> float | None:
-        """Return the latest averaged float value across graph columns."""
+        """Return the latest averaged float value across graph columns.
+
+        Zeros are skipped. When TrueNAS stops collecting a chart (seen with
+        cputemp on 25.10), reporting.get_data keeps answering with rows of 0
+        and empty aggregations rather than nulls. Averaging those reported a CPU
+        at 0 degrees for hours; with nothing but zeros this now returns None, so
+        the sensor shows unknown instead of a made-up reading.
+        """
         now = int(time.time())
         try:
             report = await self._send_request(
                 "reporting.get_data",
                 [[{"name": graph_name}], {"start": now - 120, "end": now}],
             )
-        except (TrueNASAPIError, TrueNASTimeoutError):
+        except TrueNASAPIError, TrueNASTimeoutError:
             return None
 
         if not isinstance(report, list) or not report:
@@ -464,7 +471,11 @@ class TrueNASWebSocketClient:
         data_points = report[0].get("data", []) if isinstance(report[0], dict) else []
         for row in reversed(data_points):
             if isinstance(row, list) and len(row) > 1:
-                vals = [float(v) for v in row[1:] if isinstance(v, (int, float))]
+                vals = [
+                    float(v)
+                    for v in row[1:]
+                    if isinstance(v, (int, float)) and not isinstance(v, bool) and v != 0
+                ]
                 if vals:
                     return round(sum(vals) / len(vals), 1)
         return None
@@ -485,7 +496,7 @@ class TrueNASWebSocketClient:
             return {}
         try:
             result = await self._send_request("disk.temperatures", [disk_names])
-        except (TrueNASAPIError, TrueNASTimeoutError):
+        except TrueNASAPIError, TrueNASTimeoutError:
             return {}
         return dict(result) if isinstance(result, dict) else {}
 
@@ -539,7 +550,7 @@ class TrueNASWebSocketClient:
 
         try:
             boot = await self._send_request("boot.get_state")
-        except (TrueNASAPIError, TrueNASTimeoutError):
+        except TrueNASAPIError, TrueNASTimeoutError:
             boot = None
 
         if isinstance(boot, dict) and boot.get("name"):

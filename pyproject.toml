@@ -2,22 +2,23 @@
 name = "ha-truenas"
 # Kept in step with custom_components/truenas_ws/manifest.json. The release-gate
 # job in CI fails a tag push when the two disagree.
-version = "0.7.0"
+version = "0.7.1"
 description = "TrueNAS integration for Home Assistant using JSON-RPC 2.0 WebSocket API"
-requires-python = ">=3.13"
+requires-python = ">=3.14.2"
 license = "MIT"
 
 dependencies = [
-    # 2024.6.0 is the real floor, not a guess: entry.runtime_data and the generic
-    # ConfigEntry[T] this package relies on only exist from 2024.6 onward, and the
-    # PEP 695 "type" / "def f[T]()" syntax in coordinator.py needs Python 3.12,
-    # which HA only started requiring in 2024.4.
-    "homeassistant>=2024.6.0",
+    # 2026.8.0 is the real floor, not a guess: the device registry's
+    # async_get_device_by_identifier and DeviceInfo.via_device_id first shipped
+    # in 2026.8.0 (neither is in 2026.7.0). HA 2026.8.0 also requires Python 3.14.2,
+    # hence requires-python above.
+    "homeassistant>=2026.8.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "homeassistant-stubs",
+    # 2026.10.0 is the newest stubs release; it knows the 2026.8 registry APIs.
+    "homeassistant-stubs>=2026.10.0",
     "mypy",
     "pre-commit",
     "pylint",
@@ -37,7 +38,7 @@ build-backend = "hatchling.build"
 package = false
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 line-length = 100
 
 [tool.ruff.lint]
@@ -54,8 +55,12 @@ select = [
 ]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

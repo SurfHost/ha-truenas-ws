@@ -6,12 +6,14 @@ import logging
 
 from homeassistant.const import CONF_HOST, CONF_SCAN_INTERVAL, CONF_VERIFY_SSL, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import TrueNASWebSocketClient
 from .const import CONF_API_KEY, DEFAULT_SCAN_INTERVAL
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
+from .entity import system_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,6 +44,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrueNASConfigEntry) -> b
 
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
+
+    # Register the NAS device before the platforms load. The Storage, Apps,
+    # Services, VMs and Tasks devices link to it by registry id (via_device_id),
+    # and the registry rejects an id it does not know yet.
+    system_info = coordinator.data.system_info if coordinator.data else None
+    system_device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        **system_device_info(entry, system_info),
+    )
+    coordinator.system_device_id = system_device.id
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

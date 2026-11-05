@@ -82,7 +82,7 @@ The current profile is exposed as an attribute on the System update entity so yo
 ## Requirements
 
 - **TrueNAS SCALE 25.04 or newer** (uses the JSON-RPC 2.0 API at `/api/current`)
-- Home Assistant 2024.6.0 or newer (needs `entry.runtime_data`, plus the Python 3.12 floor HA adopted in 2024.4)
+- Home Assistant 2026.8.0 or newer (the device registry APIs this integration uses, `async_get_device_by_identifier` and `DeviceInfo.via_device_id`, first shipped in 2026.8.0)
 - A TrueNAS API key
 
 ## Architecture

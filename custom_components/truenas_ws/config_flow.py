@@ -6,7 +6,14 @@ import logging
 from typing import Any
 
 import aiohttp
-import voluptuous as vol
+
+# HA replaced voluptuous with probatio, a voluptuous-compatible library: from 2026.9
+# it aliases voluptuous to probatio at startup, and from 2026.10 flow schemas are
+# typed as probatio. HA 2026.8 does not ship probatio, so fall back there.
+try:
+    import probatio as vol
+except ImportError:  # HA 2026.8
+    import voluptuous as vol  # type: ignore[no-redef]
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_HOST, CONF_SCAN_INTERVAL, CONF_VERIFY_SSL
 from homeassistant.core import callback
@@ -64,7 +71,7 @@ class TrueNASConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
             except TrueNASAuthenticationError:
                 errors["base"] = "invalid_auth"
-            except (TimeoutError, aiohttp.ClientError):
+            except TimeoutError, aiohttp.ClientError:
                 errors["base"] = "cannot_connect"
             except Exception:
                 _LOGGER.exception("Unexpected exception")

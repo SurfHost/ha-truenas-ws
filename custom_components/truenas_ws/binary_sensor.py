@@ -7,7 +7,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.components.binary_sensor import (
+# The package re-exports BinarySensorDeviceClass at runtime on every supported HA
+# version, but the stubs do not declare it; const.py only gained it after 2026.8.0.
+from homeassistant.components.binary_sensor import (  # type: ignore[attr-defined]
     BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,

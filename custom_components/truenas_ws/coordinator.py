@@ -58,6 +58,10 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
             update_interval=timedelta(seconds=scan_interval),
         )
         self.client = client
+        # Registry id of the NAS device. async_setup_entry sets it after the first
+        # refresh and before the platforms load; the sub-devices pass it as
+        # via_device_id.
+        self.system_device_id: str | None = None
         self._last_disk_pool: float = 0
         self._last_datasets: float = 0
         self._last_tasks: float = 0
@@ -194,8 +198,9 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
         if system_info is None or not system_info.version:
             return
         registry = dr.async_get(self.hass)
-        device = registry.async_get_device(
-            identifiers={(DOMAIN, f"{self.config_entry.entry_id}_system")}
+        device = registry.async_get_device_by_identifier(
+            (DOMAIN, f"{self.config_entry.entry_id}_system"),
+            self.config_entry.entry_id,
         )
         if device is not None and device.sw_version != system_info.version:
             registry.async_update_device(device.id, sw_version=system_info.version)

@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.7.1] - 2026-11-05
+
+### Fixed
+
+- **Device registry deprecations that break in Home Assistant 2027.8.0.**
+  HA 2026.11.0 logged two warnings at startup. The version sync looked up the
+  NAS device with `async_get_device`, which is deprecated because device
+  identifiers are no longer unique across config entries; it now uses
+  `async_get_device_by_identifier` scoped to this config entry. The Storage,
+  Apps, Services, VMs and Tasks devices linked to the NAS with the deprecated
+  `via_device` identifier tuple; they now pass `via_device_id`, the registry id
+  of the NAS device. That device is now registered right after the first
+  refresh and before the platforms load, because the registry only accepts a
+  `via_device_id` it already knows. Device identifiers, names and entity unique
+  IDs are unchanged, so existing devices, entities and the device hierarchy
+  carry over as they are.
+- **CPU temperature dropped to 0 °C for hours at a time.** When TrueNAS stops
+  collecting its `cputemp` chart (happening on 25.10 since late October),
+  `reporting.get_data` keeps answering with rows of zeros and empty
+  aggregations instead of nulls, and those zeros were averaged into a reading
+  of 0.0. Zeros now count as "no reading": the sensor shows unknown during such
+  a gap and the real value as soon as TrueNAS collects again.
+
+### Changed
+
+- **Home Assistant 2026.8.0 or newer is now required** (was 2024.6.0), since
+  the replacement registry APIs first shipped in 2026.8.0. That release also
+  requires Python 3.14.2, so the development Python floor moved with it.
+- **First test suite, now run in CI.** It covers the device registry wiring:
+  the NAS device is registered before the platforms load, every grouped device
+  links to it by registry id, and a TrueNAS upgrade still updates the device's
+  software version.
+- The config flow imports `probatio` when HA ships it (HA uses it in place of
+  voluptuous from 2026.9 on) and falls back to voluptuous on 2026.8. Behaviour
+  is unchanged; this only keeps the type checker aligned with current HA.
+
 ## [0.7.0] - 2026-09-02
 
 ### Fixed

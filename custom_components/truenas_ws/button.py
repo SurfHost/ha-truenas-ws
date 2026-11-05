@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
+# The package re-exports ButtonDeviceClass at runtime on every supported HA version,
+# but the stubs do not declare it; const.py only gained it after 2026.8.0.
+from homeassistant.components.button import (  # type: ignore[attr-defined]
+    ButtonDeviceClass,
+    ButtonEntity,
+)
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityDescription

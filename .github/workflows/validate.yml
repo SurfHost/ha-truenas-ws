@@ -53,13 +53,24 @@ jobs:
       - name: mypy
         run: uv run mypy custom_components
 
-  # There is deliberately no pytest job: this repo has no tests/ directory yet.
-  # Add the job together with the first real test, not before it.
+  test:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --all-extras
+      # pytest settings (testpaths, asyncio mode) live in pyproject.toml.
+      - name: pytest
+        run: uv run pytest
 
   release-gate:
-    # Gate on the other jobs so a tag that fails lint or hassfest cannot
+    # Gate on the other jobs so a tag that fails lint, tests or hassfest cannot
     # look like a clean release in the checks list.
-    needs: [hacs, hassfest, lint]
+    needs: [hacs, hassfest, lint, test]
     name: Release gate
     # Tag pushes only. On branch pushes and pull requests there is no version to
     # compare against.
