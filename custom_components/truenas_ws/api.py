@@ -15,6 +15,7 @@ from .errors import (
     TrueNASAPIError,
     TrueNASAuthenticationError,
     TrueNASConnectionError,
+    TrueNASJobError,
     TrueNASTimeoutError,
 )
 from .models import (
@@ -41,6 +42,9 @@ _LOGGER = logging.getLogger(__name__)
 REQUEST_TIMEOUT = 30.0
 RECONNECT_MIN_DELAY = 5.0
 RECONNECT_MAX_DELAY = 300.0
+JOB_POLL_INTERVAL = 5.0
+# An app upgrade pulls every image of the app, which for Immich is several GB.
+APP_JOB_TIMEOUT = 1800.0
 
 
 def _parse_update_status(result: Any) -> UpdateInfo:
@@ -289,6 +293,45 @@ class TrueNASWebSocketClient:
             future.set_exception(TrueNASAPIError(err_msg))
         else:
             future.set_result(data.get("result"))
+
+    async def _run_job(
+        self,
+        method: str,
+        params: list[Any],
+        *,
+        timeout: float = APP_JOB_TIMEOUT,
+    ) -> Any:
+        """Call a job method and wait until the job has finished.
+
+        Job methods answer with a job id straight away; the outcome only shows
+        up in ``core.get_jobs``. A dropped connection while waiting is not
+        fatal: the coordinator reconnects and polling carries on, because the
+        job keeps running on the NAS either way.
+        """
+        job_id = await self._send_request(method, params)
+        if not isinstance(job_id, int) or isinstance(job_id, bool):
+            # Not a job id: the method already returned its final result.
+            return job_id
+
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                jobs = await self._send_request("core.get_jobs", [[["id", "=", job_id]]])
+            except (TrueNASConnectionError, TrueNASTimeoutError) as err:
+                _LOGGER.debug("Polling job %s (%s) failed, retrying: %s", job_id, method, err)
+                jobs = None
+            if isinstance(jobs, list) and jobs and isinstance(jobs[0], dict):
+                job = jobs[0]
+                state = job.get("state")
+                if state == "SUCCESS":
+                    return job.get("result")
+                if state in ("FAILED", "ABORTED"):
+                    raise TrueNASJobError(method, str(job.get("error") or state))
+            if time.monotonic() >= deadline:
+                raise TrueNASTimeoutError(
+                    f"{method} job {job_id} did not finish within {timeout:.0f} s"
+                )
+            await asyncio.sleep(JOB_POLL_INTERVAL)
 
     # ── Typed API methods ──────────────────────────────────────────
 
@@ -667,17 +710,36 @@ class TrueNASWebSocketClient:
         """Stop a virtual machine."""
         await self._send_request("vm.stop", [vm_id, {"force": force}])
 
-    async def start_app(self, app_name: str) -> None:
-        """Start an application."""
-        await self._send_request("app.start", [app_name])
+    async def start_app(self, app_name: str, *, wait: bool = False) -> None:
+        """Start an application; with ``wait`` until the start job has finished."""
+        if wait:
+            await self._run_job("app.start", [app_name])
+        else:
+            await self._send_request("app.start", [app_name])
 
     async def stop_app(self, app_name: str) -> None:
         """Stop an application."""
         await self._send_request("app.stop", [app_name])
 
     async def upgrade_app(self, app_name: str) -> None:
-        """Upgrade an application to the latest version."""
-        await self._send_request("app.upgrade", [app_name])
+        """Upgrade an application to the latest version and wait for the job.
+
+        Raises ``TrueNASJobError`` when the upgrade fails, for example on a
+        registry pull rate limit.
+        """
+        await self._run_job("app.upgrade", [app_name])
+
+    async def pull_app_images(self, app_name: str) -> None:
+        """Pull the images of the app's current version without redeploying it."""
+        await self._run_job("app.pull_images", [app_name, {"redeploy": False}])
+
+    async def get_app_state(self, app_name: str) -> str | None:
+        """Return the app's current state (RUNNING, STOPPED, ...), or None."""
+        result = await self._send_request("app.query", [[["name", "=", app_name]]])
+        if isinstance(result, list) and result and isinstance(result[0], dict):
+            state = result[0].get("state")
+            return str(state) if state is not None else None
+        return None
 
     async def reboot(self) -> None:
         """Reboot the system."""
