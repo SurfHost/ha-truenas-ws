@@ -16,8 +16,12 @@ from homeassistant.components.sensor import (
 from homeassistant.const import (
     PERCENTAGE,
     EntityCategory,
+    UnitOfDataRate,
+    UnitOfElectricPotential,
+    UnitOfFrequency,
     UnitOfInformation,
     UnitOfTemperature,
+    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -26,13 +30,20 @@ from homeassistant.helpers.typing import StateType
 from .coordinator import TrueNASConfigEntry
 from .entity import (
     DEVICE_KEY_APPS,
+    DEVICE_KEY_NETWORK,
     DEVICE_KEY_STORAGE,
     DEVICE_KEY_SYSTEM,
     DEVICE_KEY_TASKS,
+    DEVICE_KEY_UPS,
     DEVICE_KEY_VMS,
     TrueNASEntity,
 )
-from .models import TrueNASData
+from .models import PoolInfo, TrueNASData
+
+# TrueNAS alert levels, most severe first.
+ALERT_LEVELS = ("EMERGENCY", "ALERT", "CRITICAL", "ERROR", "WARNING", "NOTICE", "INFO")
+
+SCRUB_STATES = ["none", "scrubbing", "resilvering", "paused", "finished", "canceled"]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -50,11 +61,10 @@ def _alert_attrs(data: TrueNASData) -> dict[str, Any]:
         key=lambda a: (a.raised_at is not None, a.raised_at),
         reverse=True,
     )
+    present = {a.level for a in active}
     return {
-        "critical": sum(a.level == "CRITICAL" for a in active),
-        "error": sum(a.level == "ERROR" for a in active),
-        "warning": sum(a.level == "WARNING" for a in active),
-        "info": sum(a.level == "INFO" for a in active),
+        "highest_level": next((lvl for lvl in ALERT_LEVELS if lvl in present), None),
+        **{lvl.lower(): sum(a.level == lvl for a in active) for lvl in ALERT_LEVELS},
         "latest": [
             {
                 "level": a.level,
@@ -210,6 +220,64 @@ SYSTEM_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
 )
 
 
+# ── UPS sensors ───────────────────────────────────────────────────
+
+UPS_OPTIONAL = frozenset({"ups_input_voltage", "ups_frequency"})
+
+UPS_SENSORS: tuple[TrueNASSensorEntityDescription, ...] = (
+    TrueNASSensorEntityDescription(
+        key="ups_charge",
+        translation_key="ups_charge",
+        name="Battery charge",
+        native_unit_of_measurement=PERCENTAGE,
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data.ups.charge if data.ups else None,
+    ),
+    TrueNASSensorEntityDescription(
+        key="ups_runtime",
+        translation_key="ups_runtime",
+        name="Battery runtime",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        suggested_unit_of_measurement=UnitOfTime.MINUTES,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        icon="mdi:battery-clock",
+        value_fn=lambda data: data.ups.runtime if data.ups else None,
+    ),
+    TrueNASSensorEntityDescription(
+        key="ups_load",
+        translation_key="ups_load",
+        name="Load",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:gauge",
+        value_fn=lambda data: data.ups.load if data.ups else None,
+    ),
+    TrueNASSensorEntityDescription(
+        key="ups_input_voltage",
+        translation_key="ups_input_voltage",
+        name="Input voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: data.ups.input_voltage if data.ups else None,
+    ),
+    TrueNASSensorEntityDescription(
+        key="ups_frequency",
+        translation_key="ups_frequency",
+        name="Frequency",
+        native_unit_of_measurement=UnitOfFrequency.HERTZ,
+        device_class=SensorDeviceClass.FREQUENCY,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: data.ups.frequency if data.ups else None,
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: TrueNASConfigEntry,
@@ -227,6 +295,21 @@ async def async_setup_entry(
     for pool in coordinator.data.pools:
         for desc in _pool_sensors(pool.name):
             entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_STORAGE))
+
+    # Network interface traffic. Interfaces without a link at setup start
+    # disabled, so unused ports don't clutter the device.
+    for iface in coordinator.data.network_interfaces:
+        enabled = iface.state == "LINK_STATE_UP"
+        for desc in _interface_sensors(iface.name, enabled_default=enabled):
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_NETWORK))
+
+    # UPS readings, only when TrueNAS monitors a UPS. Voltage and frequency
+    # are left out when this UPS does not report them.
+    if coordinator.data.ups is not None:
+        for desc in UPS_SENSORS:
+            if desc.key in UPS_OPTIONAL and desc.value_fn(coordinator.data) is None:
+                continue
+            entities.append(TrueNASSensor(coordinator, desc, DEVICE_KEY_UPS))
 
     # Disk sensors
     for disk in coordinator.data.disks:
@@ -366,6 +449,106 @@ def _pool_sensors(pool_name: str) -> tuple[TrueNASSensorEntityDescription, ...]:
             entity_category=EntityCategory.DIAGNOSTIC,
             value_fn=lambda data: p.fragmentation if (p := _find_pool(data)) else None,
         ),
+        TrueNASSensorEntityDescription(
+            key=f"pool_{pool_name}_scrub_state",
+            name=f"{pool_name} scrub",
+            device_class=SensorDeviceClass.ENUM,
+            options=SCRUB_STATES,
+            icon="mdi:magnify-scan",
+            value_fn=lambda data: _scrub_state(p) if (p := _find_pool(data)) else None,
+            extra_attrs_fn=lambda data: (
+                {
+                    "function": p.scan.function,
+                    "started": p.scan.start_time.isoformat() if p.scan.start_time else None,
+                    "ended": p.scan.end_time.isoformat() if p.scan.end_time else None,
+                }
+                if (p := _find_pool(data))
+                else {}
+            ),
+        ),
+        TrueNASSensorEntityDescription(
+            key=f"pool_{pool_name}_scrub_progress",
+            name=f"{pool_name} scrub progress",
+            native_unit_of_measurement=PERCENTAGE,
+            suggested_display_precision=1,
+            icon="mdi:progress-check",
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=lambda data: _scrub_progress(p) if (p := _find_pool(data)) else None,
+        ),
+        TrueNASSensorEntityDescription(
+            key=f"pool_{pool_name}_last_scrub",
+            name=f"{pool_name} last scrub",
+            device_class=SensorDeviceClass.TIMESTAMP,
+            icon="mdi:calendar-check",
+            value_fn=lambda data: p.last_scrub if (p := _find_pool(data)) else None,
+        ),
+        TrueNASSensorEntityDescription(
+            key=f"pool_{pool_name}_scrub_errors",
+            name=f"{pool_name} scrub errors",
+            icon="mdi:alert-octagon",
+            state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=lambda data: p.scan.errors if (p := _find_pool(data)) else None,
+        ),
+    )
+
+
+def _scrub_state(pool: PoolInfo) -> str:
+    """Map the pool's latest scan onto one of SCRUB_STATES."""
+    scan = pool.scan
+    if scan.state is None:
+        return "none"
+    if scan.state == "SCANNING":
+        if scan.paused:
+            return "paused"
+        return "resilvering" if scan.function == "RESILVER" else "scrubbing"
+    if scan.state == "CANCELED":
+        return "canceled"
+    return "finished"
+
+
+def _scrub_progress(pool: PoolInfo) -> float | None:
+    """Return the scan's progress; a finished scan is 100 %, none is unknown."""
+    scan = pool.scan
+    if scan.state == "FINISHED":
+        return 100.0
+    if scan.percentage is None:
+        return None
+    return round(min(scan.percentage, 100.0), 1)
+
+
+def _interface_sensors(
+    iface_name: str, enabled_default: bool = True
+) -> tuple[TrueNASSensorEntityDescription, ...]:
+    """Create receive/send traffic sensors for a network interface."""
+
+    def _traffic(direction: str) -> Callable[[TrueNASData], StateType]:
+        def _value(data: TrueNASData) -> StateType:
+            t = data.interface_traffic.get(iface_name)
+            if t is None:
+                return None
+            value = t.received if direction == "rx" else t.sent
+            return round(value, 2) if value is not None else None
+
+        return _value
+
+    return tuple(
+        TrueNASSensorEntityDescription(
+            key=f"interface_{iface_name}_{direction}",
+            name=f"{iface_name} {label}",
+            native_unit_of_measurement=UnitOfDataRate.KILOBITS_PER_SECOND,
+            suggested_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
+            device_class=SensorDeviceClass.DATA_RATE,
+            state_class=SensorStateClass.MEASUREMENT,
+            suggested_display_precision=2,
+            icon=icon,
+            entity_registry_enabled_default=enabled_default,
+            value_fn=_traffic(direction),
+        )
+        for direction, label, icon in (
+            ("rx", "received", "mdi:download-network"),
+            ("tx", "sent", "mdi:upload-network"),
+        )
     )
 
 

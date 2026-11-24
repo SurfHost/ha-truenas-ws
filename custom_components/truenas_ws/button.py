@@ -31,6 +31,13 @@ async def async_setup_entry(
     entities.append(TrueNASRebootButton(coordinator))
     entities.append(TrueNASShutdownButton(coordinator))
 
+    # Scrub buttons per data pool. The boot pool (id 0) is scrubbed through
+    # boot.scrub, which pool.scrub.scrub does not handle.
+    for pool in coordinator.data.pools:
+        if pool.id:
+            for action in SCRUB_ACTIONS:
+                entities.append(TrueNASScrubButton(coordinator, pool.name, action))
+
     # Dataset snapshot buttons
     for dataset in coordinator.data.datasets:
         if dataset.type == "FILESYSTEM":
@@ -76,6 +83,40 @@ class TrueNASShutdownButton(TrueNASEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Shutdown the system."""
         await self.coordinator.client.shutdown()
+
+
+# pool.scrub.scrub action > (label, icon). START also resumes a paused scrub.
+SCRUB_ACTIONS: dict[str, tuple[str, str]] = {
+    "START": ("start scrub", "mdi:play"),
+    "PAUSE": ("pause scrub", "mdi:pause"),
+    "STOP": ("stop scrub", "mdi:stop"),
+}
+
+
+class TrueNASScrubButton(TrueNASEntity, ButtonEntity):
+    """Button to start (or resume), pause or stop a pool scrub."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: TrueNASDataUpdateCoordinator,
+        pool_name: str,
+        action: str,
+    ) -> None:
+        """Initialize the button."""
+        label, icon = SCRUB_ACTIONS[action]
+        description = EntityDescription(key=f"pool_{pool_name}_scrub_{action.lower()}")
+        super().__init__(coordinator, description, DEVICE_KEY_STORAGE)
+        self._pool_name = pool_name
+        self._action = action
+        self._attr_name = f"{pool_name} {label}"
+        self._attr_icon = icon
+
+    async def async_press(self) -> None:
+        """Send the scrub action and refresh so the scrub sensors follow."""
+        await self.coordinator.client.scrub_pool(self._pool_name, self._action)
+        await self.coordinator.async_request_refresh()
 
 
 class TrueNASSnapshotButton(TrueNASEntity, ButtonEntity):

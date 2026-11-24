@@ -50,6 +50,11 @@
       "uptime": { "name": "Uptime" },
       "arc_size": { "name": "ARC size" },
       "alerts": { "name": "Active alerts" },
+      "ups_charge": { "name": "Battery charge" },
+      "ups_runtime": { "name": "Battery runtime" },
+      "ups_load": { "name": "Load" },
+      "ups_input_voltage": { "name": "Input voltage" },
+      "ups_frequency": { "name": "Frequency" },
       "pool_status": { "name": "Status" },
       "pool_used": { "name": "Used space" },
       "pool_free": { "name": "Free space" },
@@ -70,6 +75,8 @@
     "binary_sensor": {
       "system_healthy": { "name": "System problem" },
       "update_available": { "name": "Update available" },
+      "reboot_required": { "name": "Reboot required" },
+      "critical_alerts": { "name": "Critical alerts" },
       "pool_healthy": { "name": "Pool problem" },
       "disk_smart_healthy": { "name": "Disk problem" }
     },

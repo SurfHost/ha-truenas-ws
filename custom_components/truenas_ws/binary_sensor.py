@@ -19,8 +19,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry
-from .entity import DEVICE_KEY_STORAGE, DEVICE_KEY_SYSTEM, TrueNASEntity
+from .entity import DEVICE_KEY_NETWORK, DEVICE_KEY_STORAGE, DEVICE_KEY_SYSTEM, TrueNASEntity
 from .models import TrueNASData
+
+# Alert levels at or above CRITICAL.
+CRITICAL_ALERT_LEVELS = frozenset({"CRITICAL", "ALERT", "EMERGENCY"})
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -53,6 +56,34 @@ SYSTEM_BINARY_SENSORS: tuple[TrueNASBinarySensorEntityDescription, ...] = (
         icon="mdi:update",
         value_fn=lambda data: data.update_info.available if data.update_info else None,
     ),
+    TrueNASBinarySensorEntityDescription(
+        key="reboot_required",
+        translation_key="reboot_required",
+        name="Reboot required",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        icon="mdi:restart-alert",
+        value_fn=lambda data: (
+            bool(data.reboot_required_reasons) if data.reboot_required_reasons is not None else None
+        ),
+        extra_attrs_fn=lambda data: {"reasons": data.reboot_required_reasons or []},
+    ),
+    TrueNASBinarySensorEntityDescription(
+        key="critical_alerts",
+        translation_key="critical_alerts",
+        name="Critical alerts",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        icon="mdi:alert-octagram",
+        value_fn=lambda data: any(
+            not a.dismissed and a.level in CRITICAL_ALERT_LEVELS for a in data.alerts
+        ),
+        extra_attrs_fn=lambda data: {
+            "messages": [
+                a.message[:200]
+                for a in data.alerts
+                if not a.dismissed and a.level in CRITICAL_ALERT_LEVELS
+            ][:5]
+        },
+    ),
 )
 
 
@@ -81,7 +112,37 @@ async def async_setup_entry(
             TrueNASBinarySensor(coordinator, _disk_smart_desc(disk.name), DEVICE_KEY_STORAGE)
         )
 
+    # Network link per interface
+    for iface in coordinator.data.network_interfaces:
+        entities.append(
+            TrueNASBinarySensor(coordinator, _interface_link_desc(iface.name), DEVICE_KEY_NETWORK)
+        )
+
     async_add_entities(entities)
+
+
+def _interface_link_desc(iface_name: str) -> TrueNASBinarySensorEntityDescription:
+    """Create the link binary sensor description for a network interface."""
+
+    def _find(data: TrueNASData) -> Any:
+        return next((i for i in data.network_interfaces if i.name == iface_name), None)
+
+    return TrueNASBinarySensorEntityDescription(
+        key=f"interface_{iface_name}_link",
+        name=f"{iface_name} link",
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        icon="mdi:ethernet",
+        value_fn=lambda data: i.state == "LINK_STATE_UP" if (i := _find(data)) else None,
+        extra_attrs_fn=lambda data: (
+            {
+                "description": i.description,
+                "mtu": i.mtu,
+                "link_address": i.link_address,
+            }
+            if (i := _find(data))
+            else {}
+        ),
+    )
 
 
 def _pool_problem_desc(pool_name: str) -> TrueNASBinarySensorEntityDescription:

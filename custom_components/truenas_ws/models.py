@@ -105,6 +105,38 @@ def _parse_fragmentation(value: Any) -> int:
 
 
 @dataclass(frozen=True, slots=True)
+class PoolScan:
+    """The latest scan (scrub or resilver) of a pool, as ``pool.query`` reports it."""
+
+    function: str | None = None
+    state: str | None = None
+    percentage: float | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    errors: int | None = None
+    paused: bool = False
+
+
+def _parse_scan(value: Any) -> PoolScan:
+    """Parse the ``scan`` object of a pool; an absent scan gives an empty one."""
+    if not isinstance(value, dict):
+        return PoolScan()
+    pct = value.get("percentage")
+    errors = value.get("errors")
+    return PoolScan(
+        function=value.get("function") or None,
+        state=value.get("state") or None,
+        percentage=_parse_float(pct) if pct is not None else None,
+        start_time=_parse_datetime(value.get("start_time")),
+        end_time=_parse_datetime(value.get("end_time")),
+        errors=_parse_int(errors) if errors is not None else None,
+        # TrueNAS keeps reporting SCANNING for a paused scrub; "pause" holds
+        # the moment it was paused.
+        paused=value.get("pause") is not None,
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class SystemInfo:
     """System information from TrueNAS."""
 
@@ -267,6 +299,10 @@ class PoolInfo:
     scan_percentage: float | None
     autotrim: bool
     path: str
+    scan: PoolScan = field(default_factory=PoolScan)
+    # End of the last finished scrub. Unlike scan.end_time it survives a new
+    # scrub starting: the coordinator carries it over from the previous poll.
+    last_scrub: datetime | None = None
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> Self:
@@ -277,6 +313,7 @@ class PoolInfo:
         if scan:
             scan_state = scan.get("state")
             scan_pct = scan.get("percentage")
+        parsed_scan = _parse_scan(scan)
 
         autotrim_raw = data.get("autotrim", {})
         if isinstance(autotrim_raw, dict):
@@ -300,6 +337,8 @@ class PoolInfo:
             scan_percentage=scan_pct,
             autotrim=autotrim,
             path=data.get("path", ""),
+            scan=parsed_scan,
+            last_scrub=_finished_scrub_end(parsed_scan),
         )
 
     @classmethod
@@ -315,6 +354,7 @@ class PoolInfo:
         if scan:
             scan_state = scan.get("state")
             scan_pct = scan.get("percentage")
+        parsed_scan = _parse_scan(scan)
 
         # Size/allocated/free are at top level
         size = int(data.get("size") or 0)
@@ -348,7 +388,16 @@ class PoolInfo:
             scan_percentage=scan_pct,
             autotrim=autotrim,
             path=data.get("path", ""),
+            scan=parsed_scan,
+            last_scrub=_finished_scrub_end(parsed_scan),
         )
+
+
+def _finished_scrub_end(scan: PoolScan) -> datetime | None:
+    """Return when the scan ended, if it is a finished scrub."""
+    if scan.function == "SCRUB" and scan.state == "FINISHED":
+        return scan.end_time
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -726,6 +775,25 @@ class UpdateInfo:
     train: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class InterfaceTraffic:
+    """Current traffic of a network interface in kilobits per second."""
+
+    received: float | None
+    sent: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class UpsStatus:
+    """Live readings of the UPS that TrueNAS monitors."""
+
+    charge: float | None = None
+    runtime: float | None = None
+    load: float | None = None
+    input_voltage: float | None = None
+    frequency: float | None = None
+
+
 @dataclass(slots=True)
 class TrueNASData:
     """Aggregated TrueNAS data container."""
@@ -746,3 +814,7 @@ class TrueNASData:
     rsync_tasks: list[RsyncTask] = field(default_factory=list)
     alerts: list[Alert] = field(default_factory=list)
     update_info: UpdateInfo | None = None
+    # None until system.reboot.info answered once; [] means no reboot needed.
+    reboot_required_reasons: list[str] | None = None
+    interface_traffic: dict[str, InterfaceTraffic] = field(default_factory=dict)
+    ups: UpsStatus | None = None

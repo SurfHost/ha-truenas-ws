@@ -1,7 +1,7 @@
 # TrueNAS Integration for Home Assistant
 
 [![Validate](https://github.com/SurfHost/ha-truenas-ws/actions/workflows/validate.yml/badge.svg)](https://github.com/SurfHost/ha-truenas-ws/actions/workflows/validate.yml)
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![Marketplace](https://img.shields.io/badge/Marketplace-Custom_repository-41BDF5.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=SurfHost&repository=ha-truenas-ws&category=integration)
 
 Custom Home Assistant integration for TrueNAS SCALE using the **JSON-RPC 2.0 WebSocket API**. Fully compatible with TrueNAS SCALE 25 and 26+.
 
@@ -13,12 +13,23 @@ Custom Home Assistant integration for TrueNAS SCALE using the **JSON-RPC 2.0 Web
 - System load averages (1/5/15 min)
 - System uptime
 - ZFS ARC size
-- Active alerts count
+- Active alerts count, with a count per alert level and the highest active level
+- Critical alerts (CRITICAL, ALERT or EMERGENCY)
+- Reboot required, with the reasons
 
 ### Storage
 - **Pools**: Status, health, used/free/total space, usage %, fragmentation (includes boot pool)
 - **Datasets**: Used/available space, usage percentage
 - **Disks**: Temperature per disk
+- **Scrubs**: State, progress, last finished scrub and errors per pool; start, pause and stop buttons for data pools
+
+### Network
+- Received and sent traffic per interface
+- Link state per interface
+
+### UPS
+- Battery charge, battery runtime and load of the UPS that TrueNAS monitors
+- Input voltage and frequency, if the UPS reports them
 
 ### Services, Apps & VMs
 - Service status monitoring with start/stop switches
@@ -38,17 +49,21 @@ Custom Home Assistant integration for TrueNAS SCALE using the **JSON-RPC 2.0 Web
 
 ## Installation
 
-### HACS (Recommended)
+### Marketplace (recommended)
 
-[![Add Repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=SurfHost&repository=ha-truenas-ws&category=integration)
+Since Home Assistant 2026.11, HACS is built into Home Assistant as the **Marketplace**. An existing HACS installation of this integration moves over by itself and keeps receiving updates.
+
+[![Open your Home Assistant instance and open this repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=SurfHost&repository=ha-truenas-ws&category=integration)
 
 Or manually:
 
-1. Open HACS in Home Assistant
-2. Click the three dots menu > **Custom repositories**
+1. Go to **Settings > Marketplace**
+2. Open the menu and choose **Custom repositories**
 3. Add `SurfHost/ha-truenas-ws` with category **Integration**
 4. Search for "TrueNAS" and install
 5. Restart Home Assistant
+
+On Home Assistant before 2026.11, use HACS the same way.
 
 ### Manual
 
@@ -89,7 +104,8 @@ The current profile is exposed as an attribute on the System update entity so yo
 
 This integration uses TrueNAS's **JSON-RPC 2.0 WebSocket API** (`wss://{host}/api/current`) instead of the deprecated REST API. It maintains a persistent WebSocket connection with:
 
-- Multi-frequency polling (2 min for system info, stats, alerts, apps and VMs;
+- Multi-frequency polling (2 min for system info, stats, alerts, apps, VMs,
+  network traffic and UPS readings;
   5 min for disks, pools, network and tasks; 15 min for datasets; 12 h for the update check)
 - Partial failure tolerance > if one API call fails, cached data is preserved
 - Automatic reconnection with exponential backoff

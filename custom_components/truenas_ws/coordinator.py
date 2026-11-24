@@ -30,7 +30,7 @@ from .errors import (
     TrueNASError,
     TrueNASTimeoutError,
 )
-from .models import SystemInfo, TrueNASData
+from .models import PoolInfo, SystemInfo, TrueNASData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -120,6 +120,9 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
             data.services = await self._safe_fetch(self.client.get_services, data.services)
             data.apps = await self._safe_fetch(self.client.get_apps, data.apps)
             data.vms = await self._safe_fetch(self.client.get_vms, data.vms)
+            data.reboot_required_reasons = await self._safe_fetch(
+                self.client.get_reboot_required_reasons, data.reboot_required_reasons
+            )
 
             # ── Medium tier: every ~5 min ───────────────────────────
             if not self._last_disk_pool or now - self._last_disk_pool > DEFAULT_DISK_POOL_INTERVAL:
@@ -142,7 +145,9 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
                     lambda: self.client.get_disk_smart(disk_names),
                     data.disk_smart,
                 )
-                data.pools = await self._safe_fetch(self.client.get_pools, data.pools)
+                data.pools = self._carry_last_scrub(
+                    await self._safe_fetch(self.client.get_pools, data.pools), data.pools
+                )
                 data.network_interfaces = await self._safe_fetch(
                     self.client.get_network_interfaces, data.network_interfaces
                 )
@@ -168,6 +173,19 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
                     self.client.get_rsync_tasks, data.rsync_tasks
                 )
                 self._last_tasks = now
+
+            # ── Live readings: every cycle, after the interfaces are known ──
+            # One reporting.get_data call covers the traffic of every interface
+            # that is up and, when the UPS service runs, the UPS readings.
+            up_interfaces = [i.name for i in data.network_interfaces if i.state == "LINK_STATE_UP"]
+            ups_running = any(s.service == "ups" and s.state == "RUNNING" for s in data.services)
+            traffic, ups = await self._safe_fetch(
+                lambda: self.client.get_live_reporting(up_interfaces, ups_running),
+                (data.interface_traffic, data.ups),
+            )
+            # Interfaces that went down keep no stale traffic reading.
+            data.interface_traffic = {k: v for k, v in traffic.items() if k in up_interfaces}
+            data.ups = ups if ups_running else None
 
             # ── Update check: every 12 hours ────────────────────────
             if (
@@ -204,6 +222,21 @@ class TrueNASDataUpdateCoordinator(DataUpdateCoordinator[TrueNASData]):
         )
         if device is not None and device.sw_version != system_info.version:
             registry.async_update_device(device.id, sw_version=system_info.version)
+
+    @staticmethod
+    def _carry_last_scrub(current: list[PoolInfo], previous: list[PoolInfo]) -> list[PoolInfo]:
+        """Keep each pool's last finished scrub while a new scan is running.
+
+        ``pool.query`` only describes the latest scan, so a running scrub or a
+        resilver hides when the previous scrub finished. The previous poll
+        still knows; after a Home Assistant restart it stays unknown until a
+        scrub finishes again.
+        """
+        known = {p.name: p.last_scrub for p in previous if p.last_scrub is not None}
+        return [
+            replace(p, last_scrub=known[p.name]) if p.last_scrub is None and p.name in known else p
+            for p in current
+        ]
 
     @staticmethod
     def _stable_boot_time(

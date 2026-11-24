@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.8.0] - 2026-11-24
+
+### Added
+
+- **Network traffic per interface.** A new **Network** device has received and
+  sent sensors (in Mbit/s) and a link binary sensor for every interface.
+  Interfaces without a link when the integration starts get their traffic
+  sensors disabled by default. Traffic comes from TrueNAS's reporting data
+  every cycle, in the same request as the UPS readings.
+- **Scrub status and control per pool.** Each pool gets a scrub sensor (`none`,
+  `scrubbing`, `resilvering`, `paused`, `finished` or `canceled`, with the start
+  and end time as attributes), scrub progress, the time of the last finished
+  scrub and the number of scrub errors. Data pools also get **start**, **pause**
+  and **stop** scrub buttons; start resumes a paused scrub. The boot pool gets
+  the sensors but no buttons. The last scrub time is kept while a new scrub
+  runs; after a Home Assistant restart it is unknown until a scrub finishes
+  while a scrub is running.
+- **Reboot required** binary sensor, on when TrueNAS says it needs a reboot,
+  with the reasons as an attribute.
+- **Critical alerts** binary sensor, on for an active alert of level CRITICAL,
+  ALERT or EMERGENCY, with up to five messages as an attribute.
+- **UPS readings.** When the TrueNAS UPS service runs, a new **UPS** device
+  shows battery charge, battery runtime and load, plus input voltage and
+  frequency if the UPS reports them.
+
+### Changed
+
+- The **Active alerts** sensor's attributes now cover all seven TrueNAS alert
+  levels and include `highest_level`, the most severe active level.
+- The README describes installing through the Marketplace, which replaced
+  HACS in Home Assistant 2026.11. The repository already meets what the
+  Marketplace needs (`hacs.json` and GitHub releases); nothing changes for an
+  existing installation.
+
 ## [0.7.2] - 2026-11-24
 
 ### Fixed

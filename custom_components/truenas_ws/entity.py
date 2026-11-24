@@ -17,6 +17,8 @@ DEVICE_KEY_APPS = "apps"
 DEVICE_KEY_SERVICES = "services"
 DEVICE_KEY_VMS = "vms"
 DEVICE_KEY_TASKS = "tasks"
+DEVICE_KEY_NETWORK = "network"
+DEVICE_KEY_UPS = "ups"
 
 
 # Devices grouped under the NAS: device key > (name, model). The identifier is
@@ -27,6 +29,8 @@ _SUB_DEVICES: dict[str, tuple[str, str]] = {
     DEVICE_KEY_SERVICES: ("Services", "System Services"),
     DEVICE_KEY_VMS: ("Virtual Machines", "VMs"),
     DEVICE_KEY_TASKS: ("Tasks", "Scheduled Tasks"),
+    DEVICE_KEY_NETWORK: ("Network", "Network Interfaces"),
+    DEVICE_KEY_UPS: ("UPS", "Uninterruptible Power Supply"),
 }
 
 

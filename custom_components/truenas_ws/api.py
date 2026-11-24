@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import math
 import ssl
 import time
 from typing import Any
@@ -25,6 +26,7 @@ from .models import (
     DatasetInfo,
     DiskInfo,
     DiskSmartInfo,
+    InterfaceTraffic,
     NetworkInterface,
     PoolInfo,
     ReplicationTask,
@@ -34,6 +36,7 @@ from .models import (
     SystemInfo,
     SystemStats,
     UpdateInfo,
+    UpsStatus,
     VMInfo,
 )
 
@@ -45,6 +48,27 @@ RECONNECT_MAX_DELAY = 300.0
 JOB_POLL_INTERVAL = 5.0
 # An app upgrade pulls every image of the app, which for Immich is several GB.
 APP_JOB_TIMEOUT = 1800.0
+
+# Reporting graphs TrueNAS keeps for the UPS it monitors.
+_UPS_GRAPHS = ("upscharge", "upsruntime", "upsload", "upsvoltage", "upsfrequency")
+
+
+def _finite(value: Any) -> float | None:
+    """Return value as a float, or None when it is missing or not a finite number."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value) if math.isfinite(value) else None
+
+
+def _latest_row(graph: dict[str, Any]) -> list[Any] | None:
+    """Return the newest row of a reporting graph that holds at least one reading."""
+    data = graph.get("data")
+    if not isinstance(data, list):
+        return None
+    for row in reversed(data):
+        if isinstance(row, list) and any(_finite(v) is not None for v in row[1:]):
+            return row
+    return None
 
 
 def _parse_update_status(result: Any) -> UpdateInfo:
@@ -692,7 +716,87 @@ class TrueNASWebSocketClient:
         _LOGGER.debug("update.status response: %s", result)
         return _parse_update_status(result)
 
+    async def get_reboot_required_reasons(self) -> list[str]:
+        """Return why TrueNAS needs a reboot; empty when it does not."""
+        result = await self._send_request("system.reboot.info")
+        if not isinstance(result, dict):
+            raise TrueNASAPIError(
+                f"Unexpected system.reboot.info response: {type(result).__name__}"
+            )
+        reasons: list[str] = []
+        for item in result.get("reboot_required_reasons") or []:
+            if isinstance(item, dict):
+                reasons.append(str(item.get("reason") or item.get("code") or ""))
+            elif item:
+                reasons.append(str(item))
+        return [r for r in reasons if r]
+
+    async def get_live_reporting(
+        self, interfaces: list[str], ups: bool
+    ) -> tuple[dict[str, InterfaceTraffic], UpsStatus | None]:
+        """Fetch interface traffic and UPS readings in one ``reporting.get_data`` call.
+
+        Each graph's latest row with a reading is used. Interface traffic is
+        in kilobits per second. A UPS reading of exactly 0 for voltage or
+        frequency means the UPS does not report it, not that mains is gone:
+        on battery the UPS still reports its output side.
+        """
+        graphs: list[dict[str, str]] = [
+            {"name": "interface", "identifier": name} for name in interfaces
+        ]
+        if ups:
+            graphs += [{"name": name} for name in _UPS_GRAPHS]
+        if not graphs:
+            return {}, None
+
+        now = int(time.time())
+        report = await self._send_request(
+            "reporting.get_data",
+            [graphs, {"start": now - 300, "end": now, "aggregate": False}],
+        )
+        if not isinstance(report, list):
+            raise TrueNASAPIError(
+                f"Unexpected reporting.get_data response: {type(report).__name__}"
+            )
+
+        traffic: dict[str, InterfaceTraffic] = {}
+        ups_values: dict[str, float | None] = {}
+        for graph in report:
+            if not isinstance(graph, dict):
+                continue
+            row = _latest_row(graph)
+            legend = graph.get("legend") or []
+            name = graph.get("name")
+            if name == "interface":
+                identifier = str(graph.get("identifier") or "")
+                values = dict(zip(legend, row, strict=False)) if row else {}
+                traffic[identifier] = InterfaceTraffic(
+                    received=_finite(values.get("received")),
+                    sent=_finite(values.get("sent")),
+                )
+            elif name in _UPS_GRAPHS:
+                # Column 0 is the timestamp, column 1 the reading.
+                ups_values[name] = _finite(row[1]) if row and len(row) > 1 else None
+
+        status: UpsStatus | None = None
+        if ups:
+            status = UpsStatus(
+                charge=ups_values.get("upscharge"),
+                runtime=ups_values.get("upsruntime"),
+                load=ups_values.get("upsload"),
+                input_voltage=ups_values.get("upsvoltage") or None,
+                frequency=ups_values.get("upsfrequency") or None,
+            )
+        return traffic, status
+
     # ── Action methods ──────────────────────────────────────────
+
+    async def scrub_pool(self, pool_name: str, action: str) -> None:
+        """Start (or resume), pause or stop a scrub of a pool.
+
+        Does not wait for the job: a started scrub runs for hours.
+        """
+        await self._send_request("pool.scrub.scrub", [pool_name, action])
 
     async def start_service(self, service_name: str) -> bool:
         """Start a service."""
