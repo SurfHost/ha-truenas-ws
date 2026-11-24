@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.7.2] - 2026-11-24
+
+### Fixed
+
+- **An app upgrade that hit a registry pull rate limit left the app stopped.**
+  When `app.upgrade` fails halfway through pulling images (ghcr.io answers
+  `toomanyrequests`, TrueNAS reports "you have reached your pull rate limit"),
+  TrueNAS has already switched the app to the new version but leaves it
+  stopped, and Home Assistant never noticed. The app update entity now waits
+  for the upgrade job to finish. On a rate limit it retries in the background
+  after 5, 10 and 20 minutes: it pulls the images of the new version with
+  `app.pull_images` and then starts the app. The entity shows the update as in
+  progress meanwhile. If every attempt fails, a persistent notification says
+  the app is stopped.
+
+### Changed
+
+- **Installing an app update now waits for the TrueNAS job and raises when it
+  fails** (other than on a rate limit). It used to return as soon as TrueNAS
+  accepted the request, so failures were invisible. An automation that
+  installs several app updates in a row now runs them one after the other, and
+  stops at a failed upgrade unless the step has `continue_on_error: true`.
+
 ## [0.7.1] - 2026-11-05
 
 ### Fixed

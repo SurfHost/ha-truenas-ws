@@ -2,21 +2,29 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
+from homeassistant.components import persistent_notification
 from homeassistant.components.update import (
     UpdateEntity,
     UpdateEntityDescription,
     UpdateEntityFeature,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TrueNASConfigEntry, TrueNASDataUpdateCoordinator
 from .entity import DEVICE_KEY_APPS, DEVICE_KEY_SYSTEM, TrueNASEntity
+from .errors import TrueNASError, TrueNASJobError
 from .models import AppInfo
 
 _LOGGER = logging.getLogger(__name__)
+
+# Seconds to wait before each recovery attempt after an upgrade hit a registry
+# pull rate limit: 5, 10 and 20 minutes.
+RATE_LIMIT_RETRY_DELAYS: tuple[float, ...] = (300.0, 600.0, 1200.0)
 
 
 async def async_setup_entry(
@@ -144,6 +152,16 @@ class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
         self._app_name = app_name
         self._attr_name = f"{app_name} update"
         self._installing = False
+        self._recovery_task: asyncio.Task[None] | None = None
+
+    @property
+    def _recovering(self) -> bool:
+        """Return True while a rate-limit recovery is pending or running."""
+        return self._recovery_task is not None and not self._recovery_task.done()
+
+    @property
+    def _notification_id(self) -> str:
+        return f"truenas_ws_{self.coordinator.config_entry.entry_id}_{self._app_name}_upgrade"
 
     def _find_app(self) -> AppInfo | None:
         """Return the current app data from the coordinator, if present."""
@@ -173,6 +191,10 @@ class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
     @property
     def in_progress(self) -> bool:
         """Return True while the app is being upgraded."""
+        if self._recovering:
+            # A failed upgrade already reports upgrade_available = False, so
+            # the check below would clear the spinner too early.
+            return True
         if self._installing:
             # Auto-clear once TrueNAS reports upgrade_available = False
             app = self._find_app()
@@ -188,15 +210,111 @@ class TrueNASAppUpdateEntity(TrueNASEntity, UpdateEntity):
         backup: bool,
         **kwargs: object,
     ) -> None:
-        """Upgrade the application to the latest version."""
+        """Upgrade the application and wait for the TrueNAS job to finish.
+
+        When the upgrade fails on a registry pull rate limit, TrueNAS has
+        already switched the app to the new version but leaves it stopped.
+        That case is not raised: a background task pulls the images again
+        later and starts the app. Any other failure is raised.
+        """
+        if self._recovering:
+            raise HomeAssistantError(f"{self._app_name} is still recovering from a failed upgrade")
         self._installing = True
         self.async_write_ha_state()
         try:
             await self.coordinator.client.upgrade_app(self._app_name)
+        except TrueNASJobError as err:
+            if not err.rate_limited:
+                self._installing = False
+                self.async_write_ha_state()
+                raise
+            _LOGGER.warning(
+                "Upgrade of %s hit a registry pull rate limit; it will be retried "
+                "in the background: %s",
+                self._app_name,
+                err.error,
+            )
+            self._recovery_task = self.coordinator.config_entry.async_create_background_task(
+                self.hass,
+                self._async_recover_from_rate_limit(),
+                f"truenas_ws recover {self._app_name}",
+            )
+            self.async_write_ha_state()
+            return
         except Exception:
             self._installing = False
             self.async_write_ha_state()
             raise
+        persistent_notification.async_dismiss(self.hass, self._notification_id)
         # Trigger a refresh so the spinner clears when app.query reports
         # upgrade_available = False.
         await self.coordinator.async_request_refresh()
+
+    async def _async_recover_from_rate_limit(self) -> None:
+        """Pull the app's images again after a delay and start the app."""
+        client = self.coordinator.client
+        last_error = "pull rate limit"
+        try:
+            for attempt, delay in enumerate(RATE_LIMIT_RETRY_DELAYS, start=1):
+                await asyncio.sleep(delay)
+                try:
+                    if await client.get_app_state(self._app_name) == "RUNNING":
+                        _LOGGER.info("%s is running again", self._app_name)
+                        break
+                    await client.pull_app_images(self._app_name)
+                    await client.start_app(self._app_name, wait=True)
+                except TrueNASJobError as err:
+                    last_error = err.error
+                    if not err.rate_limited:
+                        _LOGGER.error("Recovering %s failed: %s", self._app_name, err)
+                        self._notify_failure(last_error)
+                        return
+                    _LOGGER.warning(
+                        "Recovering %s: attempt %d of %d still rate limited",
+                        self._app_name,
+                        attempt,
+                        len(RATE_LIMIT_RETRY_DELAYS),
+                    )
+                except TrueNASError as err:
+                    last_error = str(err)
+                    _LOGGER.warning(
+                        "Recovering %s: attempt %d of %d failed: %s",
+                        self._app_name,
+                        attempt,
+                        len(RATE_LIMIT_RETRY_DELAYS),
+                        err,
+                    )
+                else:
+                    _LOGGER.info(
+                        "%s started after a rate-limited upgrade (attempt %d)",
+                        self._app_name,
+                        attempt,
+                    )
+                    break
+            else:
+                self._notify_failure(last_error)
+                return
+            persistent_notification.async_dismiss(self.hass, self._notification_id)
+        except asyncio.CancelledError:
+            # Integration unloading; the entity is going away, so don't write state.
+            self._installing = False
+            raise
+        finally:
+            self._recovery_task = None
+        self._installing = False
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    def _notify_failure(self, error: str) -> None:
+        """Tell the user the app stayed stopped after a failed upgrade."""
+        self._installing = False
+        self._recovery_task = None
+        self.async_write_ha_state()
+        persistent_notification.async_create(
+            self.hass,
+            f"The upgrade of TrueNAS app **{self._app_name}** failed and the app "
+            f"is stopped. Retrying did not help.\n\nLast error: {error}\n\n"
+            "Start the app in TrueNAS once the registry allows pulls again.",
+            title=f"TrueNAS: {self._app_name} is stopped",
+            notification_id=self._notification_id,
+        )
